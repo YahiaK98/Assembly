@@ -4,58 +4,234 @@
 #include <String>
 #include <cmath>
 #include <algorithm>
+#include <fstream>
+#include <vector>
+#include <sstream>
+#include <tuple>
 using namespace std;
 
 struct instruction 
 {
 	string text;
 	unsigned int MachineCode;
-	unsigned int rd, rs1, rs2, funct3, funct7, opcode;
-	unsigned int I_imm, S_imm, B_imm, U_imm, J_imm;
+	unsigned int rd, rs1, rs2, funct3, funct7, opcode; //homa dool
+	//Immediates combined/expanded from homa dool
+};
+
+struct label
+{
+	string name; 
+	int location;
 };
 
 int registers[32] = { 0 };
 unsigned int pc = 0x0;
-//char memory[8 * 1024];
+unsigned int mc = 4 * 1024;
+char memory[8 * 1024];
+vector<label> Labels;
+/*
+saveword
+0-> store in mc and increment mc by 4
+1 -> increment mc by 3 then do as 0
+2
+3
+savebyte
+-> 
+
+tobeloaded= mem[base+offset]
+
+*/
 
 int Assemble(string Text);
 instruction Parse(int MachineCode);
-void Execute(instruction& inst);
-void readFile(); 
+void Execute(instruction inst);
+bool readFile(string filename); 
 void Run();
+void Error()
+{
+	;
+}
 
-int main() {	
-	readFile();
-	Run();
+int main() {
+	/*memset(memory, 0, 8 * 1024);
+	string file; 
+	getline(cin, file); 
+	if (readFile(file))
+		Run();
+	else
+		Error();
+		*/
+	registers[1] = 1; 
+	registers[2] = 2;
+	string test; 
+	getline(cin, test);
+	int mach = Assemble(test);
+	cout << hex << mach << endl;
+	instruction parsed = Parse(mach); 
+	Execute(parsed);
+	cout << registers[3] << endl;
+	system("pause");
 	return 0;
 }
 
-void readFile()
+bool readFile(string filename)
 {
-	//open file. read line by line. string to machine code in memory
-
+	ifstream Infile; 
+	string temp;
+	int filler;
+	Infile.open(filename); 
+	if (!Infile.fail())
+	{
+		label tempL;
+		int InstructionNo = 0;
+		while (!Infile.eof())
+		{
+			bool IsLabel = false;
+			getline(Infile, temp);
+			for(int i=0; i<temp.size()&&!IsLabel; i++)
+				if (temp.at(i) == ':')
+				{
+					tempL.location = InstructionNo*4; 
+					tempL.name = temp;
+					IsLabel = true;
+				}
+			if (IsLabel)
+				Labels.push_back(tempL);
+			else
+				InstructionNo++;
+		}
+		Infile.close();
+		Infile.open(filename);
+		filler = pc;
+		while (!Infile.eof())
+		{
+			getline(Infile, temp);
+			int machine = Assemble(temp);
+			memory[filler] = machine & 0xFF000000;
+			memory[filler +1] = machine & 0x00FF0000;
+			memory[filler +2] = machine & 0x0000FF00;
+			memory[filler +3] = machine & 0x000000FF;
+			filler += 4;		
+		}
+		Infile.close();
+		return true;
+	}
+	else
+	{
+		cout << "File Failed To load, Exiting.. " << endl;
+		return false;
+	}
 }
 
 void Run()
 {
-	//Take the machine code pointed at by the pc
-	//convert to insruction
-	//increment PC
-	//execute it
-	//Loop
+	while (memory[pc] != 0)
+	{
+		int machine = ((memory[pc]) << 24) + ((memory[pc + 1]) << 16) + ((memory[pc + 2]) << 8) + ((memory[pc + 3]));
+		Execute(Parse(machine));
+		pc += 4;
+	}
 }
 
 int Assemble(string Text)
 {
+	int Returned = 0;
+	stringstream stream; 
+	stream << Text;
+	string Operator;
+	getline(stream, Operator, '\t');
+	bool Assembled = false;
 
+	//R_Format
+	//Operand, funct3, funct7
+	tuple<string, int, int> R_Format[10] =
+	{
+		make_tuple("add", 0,0 ),
+		make_tuple("sub", 0,32),
+		make_tuple("sll", 1,0),
+		make_tuple("slt", 2,0),
+		make_tuple("sltu", 3,0),
+		make_tuple("xor", 4,0),
+		make_tuple("srl", 5,0),
+		make_tuple("sra", 5,32),
+		make_tuple("or", 6,0),
+		make_tuple("and", 7,0)
+	};
+	for (size_t i = 0; i < 10; i++)
+	{
+		if (Operator == get<0>(R_Format[i]))
+		{
+			Assembled = true;
+			string Tokens[3];
+			int intTokens[3];
+			for (int j = 0; j < 3; j++)
+			{
+				getline(stream, Tokens[j], ',');
+				intTokens[j] = stoi(Tokens[j].substr(1, Tokens[j].size() - 1));
+			}
+
+			Returned = Returned + 0x33; 
+			Returned = Returned + ((intTokens[0]) << 7);
+			Returned = Returned + ((get<1>(R_Format[i])) << 12);
+			Returned = Returned + ((intTokens[1]) << 15);
+			Returned = Returned + ((intTokens[2]) << 20);
+			Returned = Returned + ((get<2>(R_Format[i])) << 25);
+		}
+	}
+	//MemoryLoad
+	tuple <string, int> Memory_L[5] =
+	{
+		make_tuple("lb", 0),
+		make_tuple("lh", 1),
+		make_tuple("lw", 2),
+		make_tuple("lbu", 4),
+		make_tuple("lhu", 5)
+	};
+
+	for (size_t i = 0; i < 5; i++)
+	{
+		if (Operator == get<0>(Memory_L[i]))
+		{
+			Assembled = true;
+			int rd, rs1; 
+			int imm;
+			string temp;
+			getline(stream, temp, ','); 
+			rd = stoi(temp.substr(1, temp.size() - 1));
+			getline(stream, temp, '(');
+			imm = stoi(temp);
+			getline(stream, temp, ')');
+			rs1 = stoi(temp.substr(1, temp.size() - 1));
+
+			Returned = Returned + 0x3; 
+			Returned += (rd << 7); 
+			Returned += (get<1>(Memory_L[i]) << 12); 
+			Returned += (rs1 << 15);
+			Returned += (imm << 20);
+		}
+	}
+
+	//I_Format
+
+	//S_Format
+
+	return Returned;
 }
 
 instruction Parse(int MachineCode)
 {
-
+	//7-5-5-3-5-7
+	instruction Returned; 
+	Returned.funct7 = ((MachineCode & 0xfe000000)>>25);
+	Returned.rs2 = ((MachineCode & 0x01f00000)>>20);
+	Returned.rs1 = ((MachineCode & 0x000f8000)>>15);
+	Returned.funct3 = ((MachineCode & 0x00007000)>>12);
+	Returned.rd = ((MachineCode & 0x00000f80)>>7);
+	Returned.opcode = (MachineCode & 0x0000007f);
+	return Returned;
 }
 
-void Execute(instruction& inst)
+void Execute(instruction inst)
 {
 	// Executing instructions
 	if (inst.opcode == 0x33)
@@ -72,13 +248,13 @@ void Execute(instruction& inst)
 			registers[inst.rd] = (registers[inst.rs1]) << (registers[inst.rs2] & 0x0000001F); // SLL (lower 5 bits)
 			break;
 		case 2:
-			if (signed(registers[inst.rs1]) < signed(registers[inst.rs2])) // SLT 
+			if ((registers[inst.rs1]) < (registers[inst.rs2])) // SLT 
 				registers[inst.rd] = 1;
 			else
 				registers[inst.rd] = 0;
 			break;
 		case 3:
-			if (unsigned(registers[inst.rs1]) < unsigned(registers[inst.rs2])) // SLTU
+			if (abs(registers[inst.rs1]) < abs(registers[inst.rs2])) // SLTU
 				registers[inst.rd] = 1;
 			else
 				registers[inst.rd] = 0;
