@@ -3,9 +3,11 @@
 #include "stdlib.h"
 #include <String>
 #include <cmath>
+#include <algorithm>
 using namespace std;
 
-struct instruction {
+struct instruction 
+{
 	string text;
 	unsigned int MachineCode;
 	unsigned int rd, rs1, rs2, funct3, funct7, opcode;
@@ -16,10 +18,45 @@ int registers[32] = { 0 };
 unsigned int pc = 0x0;
 //char memory[8 * 1024];
 
-void Assemble_Inst(instruction& inst) {
+int Assemble(string Text);
+instruction Parse(int MachineCode);
+void Execute(instruction& inst);
+void readFile(); 
+void Run();
 
-	// Generate instruction machine code
+int main() {	
+	readFile();
+	Run();
+	return 0;
+}
 
+void readFile()
+{
+	//open file. read line by line. string to machine code in memory
+
+}
+
+void Run()
+{
+	//Take the machine code pointed at by the pc
+	//convert to insruction
+	//increment PC
+	//execute it
+	//Loop
+}
+
+int Assemble(string Text)
+{
+
+}
+
+instruction Parse(int MachineCode)
+{
+
+}
+
+void Execute(instruction& inst)
+{
 	// Executing instructions
 	if (inst.opcode == 0x33)
 	{
@@ -30,16 +67,16 @@ void Assemble_Inst(instruction& inst) {
 				registers[inst.rd] = registers[inst.rs1] - registers[inst.rs2]; // sub
 			else
 				registers[inst.rd] = registers[inst.rs1] + registers[inst.rs2]; // add
-				break;
+			break;
 		case 1:
-				registers[inst.rd] = (registers[inst.rs1]) << (registers[inst.rs2] & 0x0000001F); // SLL (lower 5 bits)
-				break;
+			registers[inst.rd] = (registers[inst.rs1]) << (registers[inst.rs2] & 0x0000001F); // SLL (lower 5 bits)
+			break;
 		case 2:
 			if (signed(registers[inst.rs1]) < signed(registers[inst.rs2])) // SLT 
 				registers[inst.rd] = 1;
 			else
 				registers[inst.rd] = 0;
-				break;
+			break;
 		case 3:
 			if (unsigned(registers[inst.rs1]) < unsigned(registers[inst.rs2])) // SLTU
 				registers[inst.rd] = 1;
@@ -47,8 +84,8 @@ void Assemble_Inst(instruction& inst) {
 				registers[inst.rd] = 0;
 			break;
 		case 4:
-				registers[inst.rd] = registers[inst.rs1] ^ registers[inst.rs2]; // XOR
-				break;
+			registers[inst.rd] = registers[inst.rs1] ^ registers[inst.rs2]; // XOR
+			break;
 		case 5:
 			if (inst.funct7 == 0)
 				registers[inst.rd] = (registers[inst.rs1]) >> (registers[inst.rs2] & 0x0000001F); // SRL
@@ -66,40 +103,40 @@ void Assemble_Inst(instruction& inst) {
 				else
 					registers[inst.rd] = registers[inst.rs1] >> shamt;
 			}
-				break;
+			break;
 		case 6:
-				registers[inst.rd] = registers[inst.rs1] | registers[inst.rs2]; // OR
-				break;
+			registers[inst.rd] = registers[inst.rs1] | registers[inst.rs2]; // OR
+			break;
 		case 7:
-				registers[inst.rd] = registers[inst.rs1] & registers[inst.rs2]; // AND
-				break;
+			registers[inst.rd] = registers[inst.rs1] & registers[inst.rs2]; // AND
+			break;
 		}
 	}
 	else if (inst.opcode == 0x13)
 	{
 		switch (inst.funct3)
 		{
-		case 0: 
-				registers[inst.rd] = registers[inst.rs1] + ((inst.funct7 << 5) + inst.rs2); // ADDI
-				break;
+		case 0:
+			registers[inst.rd] = registers[inst.rs1] + ((inst.funct7 << 5) + inst.rs2); // ADDI
+			break;
 		case 1:
-				registers[inst.rd] = registers[inst.rs1] << inst.rs2; // SLLI
-				break;
+			registers[inst.rd] = registers[inst.rs1] << inst.rs2; // SLLI
+			break;
 		case 2:
 			if (signed(registers[inst.rs1]) < signed(((inst.funct7 << 5) + inst.rs2))) // SLTI 
 				registers[inst.rd] = 1;
 			else
 				registers[inst.rd] = 0;
-				break;
-		case 3: 
+			break;
+		case 3:
 			if (unsigned(registers[inst.rs1]) < (unsigned((inst.funct7 << 5) + inst.rs2))) // SLTIU
 				registers[inst.rd] = 1;
 			else
 				registers[inst.rd] = 0;
-				break;
+			break;
 		case 4:
-				registers[inst.rd] = registers[inst.rs1] ^ ((inst.funct7 << 5) + inst.rs2); // XORI
-				break;	
+			registers[inst.rd] = registers[inst.rs1] ^ ((inst.funct7 << 5) + inst.rs2); // XORI
+			break;
 		case 5:
 			if (inst.funct7 == 0)
 				registers[inst.rd] = registers[inst.rs1] >> inst.rs2; // SRLI
@@ -117,13 +154,13 @@ void Assemble_Inst(instruction& inst) {
 				else
 					registers[inst.rd] = registers[inst.rs1] >> shamt;
 			}
-				break;
+			break;
 		case 6:
-				registers[inst.rd] = registers[inst.rs1] | ((inst.funct7 << 5) + inst.rs2); // ORI
-				break;
+			registers[inst.rd] = registers[inst.rs1] | ((inst.funct7 << 5) + inst.rs2); // ORI
+			break;
 		case 7:
-				registers[inst.rd] = registers[inst.rs1] & ((inst.funct7 << 5) + inst.rs2); // ANDI
-				break;
+			registers[inst.rd] = registers[inst.rs1] & ((inst.funct7 << 5) + inst.rs2); // ANDI
+			break;
 		}
 	}
 	else if (inst.opcode == 0x37) // LUI
@@ -160,17 +197,17 @@ void Assemble_Inst(instruction& inst) {
 		switch (inst.funct3)
 		{
 		case 0: // BEQ
-				break;
+			break;
 		case 1: // BNE
-				break;
+			break;
 		case 4: // BLT
-				break;
+			break;
 		case 5: // BGE
-				break;
+			break;
 		case 6: // BLTU
-				break;
+			break;
 		case 7: // BGEU
-				break;
+			break;
 		}
 	}
 	else if (inst.opcode == 0x03)
@@ -178,15 +215,15 @@ void Assemble_Inst(instruction& inst) {
 		switch (inst.funct3)
 		{
 		case 0: // LB
-				break;
+			break;
 		case 1: // LH
-				break;
+			break;
 		case 2: // LW
-				break;
+			break;
 		case 4: // LBU
-				break;
+			break;
 		case 5: // LHU
-				break;
+			break;
 		}
 	}
 	else if (inst.opcode == 0x23)
@@ -205,14 +242,8 @@ void Assemble_Inst(instruction& inst) {
 	{
 		// ECALL
 	}
-}
-
-
-int main() {	
-	int x = 0b01001010;
-	int y = x & 0x3F;
-	cout << y << endl;
-
-	system("pause");
-	return 0;
+	else
+	{
+		//Label
+	}
 }
