@@ -1,3 +1,4 @@
+#pragma region Includes
 #include <iostream>
 #include <iomanip>
 #include "stdlib.h"
@@ -8,75 +9,74 @@
 #include <vector>
 #include <sstream>
 #include <tuple>
+#include <cstdlib>
 using namespace std;
+#pragma endregion
 
-struct instruction 
+#pragma region Types
+struct instruction
 {
 	string text;
 	unsigned int MachineCode;
 	unsigned int rd, rs1, rs2, funct3, funct7, opcode; //homa dool
-	//Immediates combined/expanded from homa dool
+													   //Immediates combined/expanded from homa dool
 };
 
 struct label
 {
-	string name; 
+	string name;
 	int location;
 };
+#pragma endregion
 
+#pragma region Globals
 int registers[32] = { 0 };
 unsigned int pc = 0x0;
-unsigned int mc = 4 * 1024;
 char memory[8 * 1024];
 vector<label> Labels;
-/*
-saveword
-0-> store in mc and increment mc by 4
-1 -> increment mc by 3 then do as 0
-2
-3
-savebyte
--> 
+#pragma endregion
 
-tobeloaded= mem[base+offset]
-
-*/
-
+#pragma region Definitions
+int  GetImm(string temp);
 int Assemble(string Text);
 instruction Parse(int MachineCode);
 void Execute(instruction inst);
-bool readFile(string filename); 
+bool readFile(string filename);
 bool IsInstruction(string temp);
 void Run();
-void Error()
-{
-	;
-}
+void Error();
+#pragma endregion
 
+#pragma region Main
 int main() {
 	memset(memory, 0, 8 * 1024);
-	string file; 
-	getline(cin, file); 
+	string file;
+	getline(cin, file);
 	if (!readFile(file))
 		Error();
-	/*registers[1] = 1; 
+	/*registers[1] = 1;
 	registers[2] = 2;
-	string test; 
+	string test;
 	getline(cin, test);
 	int mach = Assemble(test);
 	cout << hex << mach << endl;
-	instruction parsed = Parse(mach); 
+	instruction parsed = Parse(mach);
 	Execute(parsed);
 	cout << registers[3] << endl;*/
 	system("pause");
 	return 0;
 }
 
+void Error()
+{
+
+}
+
 bool readFile(string filename)
 {
-	ifstream Infile; 
+	ifstream Infile;
 	string temp;
-	Infile.open(filename); 
+	Infile.open(filename);
 	if (!Infile.fail())
 	{
 		label tempL;
@@ -85,10 +85,10 @@ bool readFile(string filename)
 		{
 			bool IsLabel = false;
 			getline(Infile, temp);
-			for(int i=0; i<temp.size()&&!IsLabel; i++)
+			for (int i = 0; i<temp.size() && !IsLabel; i++)
 				if (temp.at(i) == ':')
 				{
-					tempL.location = InstructionNo*4; 
+					tempL.location = InstructionNo * 4;
 					tempL.name = temp.substr(0, i);
 					IsLabel = true;
 				}
@@ -124,33 +124,22 @@ bool readFile(string filename)
 	}
 }
 
-bool IsInstruction(string temp)
-{
-	for (int i = 0; i < temp.size(); i++)
-	{
-		if (temp[i] == ':')
-			return false;
-	}
-	return true;
-}
-
 void Run()
 {
 	while (memory[pc] != 0)
 	{
 		int machine = ((memory[pc]) << 24) + ((memory[pc + 1]) << 16) + ((memory[pc + 2]) << 8) + ((memory[pc + 3]));
 		Execute(Parse(machine));
-		pc += 4;
+		//pc += 4; -> To be handled inside for some instructions bywado el PC amaken tanya
 	}
 }
-int Sext(int ToBeExtended)
-{
-	return ToBeExtended;
-}
+#pragma endregion
+
+#pragma region Core
 int Assemble(string Text)
 {
 	int Returned = 0;
-	stringstream stream; 
+	stringstream stream;
 	stream << Text;
 	string Operator;
 	getline(stream, Operator, '\t');
@@ -160,7 +149,7 @@ int Assemble(string Text)
 	//Operand, funct3, funct7
 	tuple<string, int, int> R_Format[10] =
 	{
-		make_tuple("add", 0,0 ),
+		make_tuple("add", 0,0),
 		make_tuple("sub", 0,32),
 		make_tuple("sll", 1,0),
 		make_tuple("slt", 2,0),
@@ -171,20 +160,23 @@ int Assemble(string Text)
 		make_tuple("or", 6,0),
 		make_tuple("and", 7,0)
 	};
-	for (size_t i = 0; i < 10&&!Assembled; i++)
+	for (size_t i = 0; i < 10 && !Assembled; i++)
 	{
 		if (Operator == get<0>(R_Format[i]))
 		{
 			Assembled = true;
 			string Tokens[3];
 			int intTokens[3];
-			for (int j = 0; j < 3; j++)
+			for (int j = 0; j < 2; j++)
 			{
 				getline(stream, Tokens[j], ',');
 				intTokens[j] = stoi(Tokens[j].substr(1, Tokens[j].size() - 1));
 			}
+			//Handling error
+			stream >> Tokens[2];
+			intTokens[2] = stoi(Tokens[2].substr(1, Tokens[2].size() - 1));
 
-			Returned = Returned + 0x33; 
+			Returned = Returned + 0x33;
 			Returned = Returned + ((intTokens[0]) << 7);
 			Returned = Returned + ((get<1>(R_Format[i])) << 12);
 			Returned = Returned + ((intTokens[1]) << 15);
@@ -192,6 +184,7 @@ int Assemble(string Text)
 			Returned = Returned + ((get<2>(R_Format[i])) << 25);
 		}
 	}
+
 	//MemoryLoad
 	tuple <string, int> Memory_L[5] =
 	{
@@ -201,24 +194,24 @@ int Assemble(string Text)
 		make_tuple("lbu", 4),
 		make_tuple("lhu", 5)
 	};
-	for (size_t i = 0; i < 5&&!Assembled; i++)
+	for (size_t i = 0; i < 5 && !Assembled; i++)
 	{
 		if (Operator == get<0>(Memory_L[i]))
 		{
 			Assembled = true;
-			int rd, rs1; 
+			int rd, rs1;
 			int imm;
 			string temp;
-			getline(stream, temp, ','); 
+			getline(stream, temp, ',');
 			rd = stoi(temp.substr(1, temp.size() - 1));
 			getline(stream, temp, '(');
-			imm = stoi(temp);
+			imm = GetImm(temp);
 			getline(stream, temp, ')');
 			rs1 = stoi(temp.substr(1, temp.size() - 1));
 
-			Returned = Returned + 0x3; 
-			Returned += (rd << 7); 
-			Returned += (get<1>(Memory_L[i]) << 12); 
+			Returned = Returned + 0x3;
+			Returned += (rd << 7);
+			Returned += (get<1>(Memory_L[i]) << 12);
 			Returned += (rs1 << 15);
 			Returned += (imm << 20);
 		}
@@ -231,8 +224,7 @@ int Assemble(string Text)
 		make_tuple("sh", 1),
 		make_tuple("sw", 2)
 	};
-
-	for (size_t i = 0; i < 3&&!Assembled; i++)
+	for (size_t i = 0; i < 3 && !Assembled; i++)
 	{
 		if (Operator == get<0>(Memory_L[i]))
 		{
@@ -243,12 +235,12 @@ int Assemble(string Text)
 			getline(stream, temp, ',');
 			rs2 = stoi(temp.substr(1, temp.size() - 1));
 			getline(stream, temp, '(');
-			offset = stoi(temp);
+			offset = GetImm(temp);
 			getline(stream, temp, ')');
 			rs1 = stoi(temp.substr(1, temp.size() - 1));
 
 			Returned = Returned + 0x23;
-			Returned += ((offset&0x1F)<< 7);
+			Returned += ((offset & 0x1F) << 7);
 			Returned += (get<1>(Memory_L[i]) << 12);
 			Returned += (rs1 << 15);
 			Returned += (rs2 << 20);
@@ -257,6 +249,7 @@ int Assemble(string Text)
 		}
 
 	}
+
 	//Branch 
 	tuple <string, int> Branch_I[6] =
 	{
@@ -267,16 +260,15 @@ int Assemble(string Text)
 		make_tuple("bltu", 6),
 		make_tuple("bgeu", 7)
 	};
-
 	for (size_t i = 0; i < 6 && !Assembled; i++)
 	{
 		if (Operator == get<0>(Branch_I[i]))
 		{
 			Assembled = true;
-			string Tokens[2]; 
-			int intTokens[2]; 
+			string Tokens[2];
+			int intTokens[2];
 			string LabelName;
-			int relativeAddress; 
+			int relativeAddress;
 			for (size_t j = 0; j < 2; j++)
 			{
 				getline(stream, Tokens[j], ',');
@@ -284,32 +276,30 @@ int Assemble(string Text)
 			}
 			stream >> LabelName;
 			bool done = false;
-			for (size_t i = 0; i <Labels.size()&&!done; i++)
+			for (size_t i = 0; i <Labels.size() && !done; i++)
 			{
 				if (Labels[i].name == LabelName)
 				{
-					if (Labels[i].location - pc < 0)
-						relativeAddress = Sext(Labels[i].location - pc < 0); 
-					else
-						relativeAddress = Labels[i].location - pc < 0;
+					relativeAddress = Labels[i].location - pc;
 					done = true;
 				}
 			}
 			if (!done)
 			{
-				Error(); 
+				Error();
 			}
 			else
 			{
 				Returned += 0x63;
-				Returned += (((relativeAddress & 0x1E) + ((relativeAddress & 0x800) >> 11))<<7);
+				Returned += (((relativeAddress & 0x1E) + ((relativeAddress & 0x800) >> 11)) << 7);
 				Returned += (get<1>(Branch_I[i]) << 12);
 				Returned += (intTokens[0] << 15);
 				Returned += (intTokens[1] << 20);
-				Returned += ((((relativeAddress & 0x7E0)>>5) + ((relativeAddress & 0x1000) >> 6)) << 25);
+				Returned += ((((relativeAddress & 0x7E0) >> 5) + ((relativeAddress & 0x1000) >> 6)) << 25);
 			}
 		}
 	}
+
 	//I_Format
 	tuple <string, int> IType_1[6] =
 	{
@@ -317,7 +307,7 @@ int Assemble(string Text)
 		make_tuple("slti", 2),
 		make_tuple("sltiu", 3),
 		make_tuple("xori", 4),
-		make_tuple("ori", 6), 
+		make_tuple("ori", 6),
 		make_tuple("andi", 7)
 	};
 	for (size_t i = 0; i < 6 && !Assembled; i++)
@@ -332,8 +322,8 @@ int Assemble(string Text)
 			rd = stoi(temp.substr(1, temp.size() - 1));
 			getline(stream, temp, ',');
 			rs1 = stoi(temp.substr(1, temp.size() - 1));
-			getline(stream, temp);
-			imm = stoi(temp);
+			stream >> temp;
+			imm = GetImm(temp);
 
 			Returned = Returned + 0x13;
 			Returned += (rd << 7);
@@ -342,7 +332,7 @@ int Assemble(string Text)
 			Returned += (imm << 20);
 		}
 	}
-
+	//I_format2
 	tuple <string, int, int> IType_2[3] =
 	{
 		make_tuple("slli", 1, 0),
@@ -361,15 +351,15 @@ int Assemble(string Text)
 			rd = stoi(temp.substr(1, temp.size() - 1));
 			getline(stream, temp, ',');
 			rs1 = stoi(temp.substr(1, temp.size() - 1));
-			getline(stream, temp);
-			shamt = stoi(temp);
+			stream >> temp;
+			shamt = GetImm(temp);
 
-			Returned = Returned + 0x13;
+			Returned = Returned + 0b0010011;
 			Returned += (rd << 7);
-			Returned += (get<1>(Memory_L[i]) << 12);
+			Returned += (get<1>(IType_2[i]) << 12);
 			Returned += (rs1 << 15);
 			Returned += (shamt << 20);
-			Returned += (get<1>(Memory_L[2]) << 25);
+			Returned += (get<2>(IType_2[i]) << 25);
 		}
 	}
 
@@ -377,36 +367,36 @@ int Assemble(string Text)
 	if (!Assembled)
 	{
 		Assembled = true;
-		if (Operator == "ecall"|| Operator == "ECALL")
+		if (Operator == "ecall" || Operator == "ECALL")
 		{
 			Returned = 0x73;
 		}
 		else if (Operator == "lui")
 		{
-			int rd, imm; 
+			int rd, imm;
 			string temp;
 			getline(stream, temp, ',');
 			rd = stoi(temp.substr(1, temp.size() - 1));
-			getline(stream, temp);
-			imm = stoi(temp);
+			stream >> temp;
+			imm = GetImm(temp);
 			Returned += 0b0110111;
-			Returned += (rd << 7); 
+			Returned += (rd << 7);
 			Returned += (imm << 12);
 
 		}
-		else if(Operator == "auipc")
+		else if (Operator == "auipc")
 		{
 			int rd, imm;
 			string temp;
 			getline(stream, temp, ',');
 			rd = stoi(temp.substr(1, temp.size() - 1));
-			getline(stream, temp);
-			imm = stoi(temp);
+			stream >> temp;
+			imm = GetImm(temp);
 			Returned += 0b0010111;
 			Returned += (rd << 7);
 			Returned += (imm << 12);
 		}
-		else if(Operator == "jal")
+		else if (Operator == "jal")
 		{
 			int rd;
 			string temp;
@@ -415,25 +405,22 @@ int Assemble(string Text)
 			getline(stream, temp, ',');
 			rd = stoi(temp.substr(1, temp.size() - 1));
 
-			getline(stream, LabelName);
+			stream >> LabelName;
 			bool done = false;
 			for (size_t i = 0; i < Labels.size() && !done; i++)
 			{
 				if (Labels[i].name == LabelName)
 				{
-					if (Labels[i].location - pc < 0)
-						relativeAddress = Sext(Labels[i].location - pc < 0);
-					else
-						relativeAddress = Labels[i].location - pc < 0;
+					relativeAddress = Labels[i].location - pc;
 					done = true;
 				}
 			}
-			int immToSend = ((relativeAddress & 0x100000) + ((relativeAddress & 0x7FE) << 9) + ((relativeAddress & 0x800) >>2)+ ((relativeAddress & 0xFF000) >> 11)) >> 1;
+			int immToSend = ((relativeAddress & 0x100000) + ((relativeAddress & 0x7FE) << 9) + ((relativeAddress & 0x800) >> 2) + ((relativeAddress & 0xFF000) >> 11)) >> 1;
 			Returned += 0b1101111;
 			Returned += (rd << 7);
 			Returned += (immToSend << 12);
 		}
-		else if(Operator == "jalr")
+		else if (Operator == "jalr")
 		{
 			int rd, rs1, imm;
 			string temp;
@@ -441,8 +428,8 @@ int Assemble(string Text)
 			rd = stoi(temp.substr(1, temp.size() - 1));
 			getline(stream, temp, ',');
 			rs1 = stoi(temp.substr(1, temp.size() - 1));
-			getline(stream, temp);
-			imm = stoi(temp);
+			stream >> temp;
+			imm = GetImm(temp);
 			Returned += 0b1100111;
 			Returned += (rd << 7);
 			Returned += (rs1 << 15);
@@ -457,12 +444,12 @@ int Assemble(string Text)
 instruction Parse(int MachineCode)
 {
 	//7-5-5-3-5-7
-	instruction Returned; 
-	Returned.funct7 = ((MachineCode & 0xfe000000)>>25);
-	Returned.rs2 = ((MachineCode & 0x01f00000)>>20);
-	Returned.rs1 = ((MachineCode & 0x000f8000)>>15);
-	Returned.funct3 = ((MachineCode & 0x00007000)>>12);
-	Returned.rd = ((MachineCode & 0x00000f80)>>7);
+	instruction Returned;
+	Returned.funct7 = ((MachineCode & 0xfe000000) >> 25);
+	Returned.rs2 = ((MachineCode & 0x01f00000) >> 20);
+	Returned.rs1 = ((MachineCode & 0x000f8000) >> 15);
+	Returned.funct3 = ((MachineCode & 0x00007000) >> 12);
+	Returned.rd = ((MachineCode & 0x00000f80) >> 7);
 	Returned.opcode = (MachineCode & 0x0000007f);
 	return Returned;
 }
@@ -659,3 +646,31 @@ void Execute(instruction inst)
 		//Label
 	}
 }
+#pragma endregion
+
+#pragma region Helpers
+bool IsInstruction(string temp)
+{
+	for (int i = 0; i < temp.size(); i++)
+	{
+		if (temp[i] == ':')
+			return false;
+	}
+	return true;
+}
+
+int  GetImm(string temp)
+{
+	int Returned;
+	if (temp.substr(0, 2) == "0x")
+	{
+		char*p;
+		Returned = strtol(temp.c_str(), &p, 16);
+	}
+	else
+	{
+		Returned = stoi(temp);
+	}
+	return Returned;
+}
+#pragma endregion
