@@ -627,7 +627,8 @@ void Execute(instruction inst)
 		offset = (offset << 1) + ((inst.rs2 & 0x1)); // imm[11]
 		offset = (offset << 10) + (((inst.funct7 & 0x3F) << 4) + (inst.rs2 >> 1));
 		registers[inst.rd] = pc + 4;
-		pc += offset;
+		pc += offset<<1;
+		pc -= 4;
 	}
 	else if (inst.opcode == 0x67)
 	{
