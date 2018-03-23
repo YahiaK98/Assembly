@@ -46,6 +46,7 @@ int Assemble(string Text);
 instruction Parse(int MachineCode);
 void Execute(instruction inst);
 bool readFile(string filename); 
+bool IsInstruction(string temp);
 void Run();
 void Error()
 {
@@ -53,15 +54,12 @@ void Error()
 }
 
 int main() {
-	/*memset(memory, 0, 8 * 1024);
+	memset(memory, 0, 8 * 1024);
 	string file; 
 	getline(cin, file); 
-	if (readFile(file))
-		Run();
-	else
+	if (!readFile(file))
 		Error();
-		*/
-	registers[1] = 1; 
+	/*registers[1] = 1; 
 	registers[2] = 2;
 	string test; 
 	getline(cin, test);
@@ -69,7 +67,7 @@ int main() {
 	cout << hex << mach << endl;
 	instruction parsed = Parse(mach); 
 	Execute(parsed);
-	cout << registers[3] << endl;
+	cout << registers[3] << endl;*/
 	system("pause");
 	return 0;
 }
@@ -78,7 +76,6 @@ bool readFile(string filename)
 {
 	ifstream Infile; 
 	string temp;
-	int filler;
 	Infile.open(filename); 
 	if (!Infile.fail())
 	{
@@ -92,7 +89,7 @@ bool readFile(string filename)
 				if (temp.at(i) == ':')
 				{
 					tempL.location = InstructionNo*4; 
-					tempL.name = temp;
+					tempL.name = temp.substr(0, i);
 					IsLabel = true;
 				}
 			if (IsLabel)
@@ -102,18 +99,22 @@ bool readFile(string filename)
 		}
 		Infile.close();
 		Infile.open(filename);
-		filler = pc;
 		while (!Infile.eof())
 		{
 			getline(Infile, temp);
-			int machine = Assemble(temp);
-			memory[filler] = machine & 0xFF000000;
-			memory[filler +1] = machine & 0x00FF0000;
-			memory[filler +2] = machine & 0x0000FF00;
-			memory[filler +3] = machine & 0x000000FF;
-			filler += 4;		
+			if (IsInstruction(temp))
+			{
+				int machine = Assemble(temp);
+				cout << hex << machine << endl;
+				memory[pc] = machine & 0xFF000000;
+				memory[pc + 1] = machine & 0x00FF0000;
+				memory[pc + 2] = machine & 0x0000FF00;
+				memory[pc + 3] = machine & 0x000000FF;
+				pc += 4;
+			}
 		}
 		Infile.close();
+		pc = 0x0;
 		return true;
 	}
 	else
@@ -121,6 +122,16 @@ bool readFile(string filename)
 		cout << "File Failed To load, Exiting.. " << endl;
 		return false;
 	}
+}
+
+bool IsInstruction(string temp)
+{
+	for (int i = 0; i < temp.size(); i++)
+	{
+		if (temp[i] == ':')
+			return false;
+	}
+	return true;
 }
 
 void Run()
@@ -132,7 +143,10 @@ void Run()
 		pc += 4;
 	}
 }
-
+int Sext(int ToBeExtended)
+{
+	return ToBeExtended;
+}
 int Assemble(string Text)
 {
 	int Returned = 0;
@@ -157,7 +171,7 @@ int Assemble(string Text)
 		make_tuple("or", 6,0),
 		make_tuple("and", 7,0)
 	};
-	for (size_t i = 0; i < 10; i++)
+	for (size_t i = 0; i < 10&&!Assembled; i++)
 	{
 		if (Operator == get<0>(R_Format[i]))
 		{
@@ -187,8 +201,7 @@ int Assemble(string Text)
 		make_tuple("lbu", 4),
 		make_tuple("lhu", 5)
 	};
-
-	for (size_t i = 0; i < 5; i++)
+	for (size_t i = 0; i < 5&&!Assembled; i++)
 	{
 		if (Operator == get<0>(Memory_L[i]))
 		{
@@ -211,9 +224,232 @@ int Assemble(string Text)
 		}
 	}
 
-	//I_Format
+	//MemorySave
+	tuple <string, int> Memory_S[3] =
+	{
+		make_tuple("sb", 0),
+		make_tuple("sh", 1),
+		make_tuple("sw", 2)
+	};
 
-	//S_Format
+	for (size_t i = 0; i < 3&&!Assembled; i++)
+	{
+		if (Operator == get<0>(Memory_L[i]))
+		{
+			Assembled = true;
+			int rs2, rs1;
+			int offset;
+			string temp;
+			getline(stream, temp, ',');
+			rs2 = stoi(temp.substr(1, temp.size() - 1));
+			getline(stream, temp, '(');
+			offset = stoi(temp);
+			getline(stream, temp, ')');
+			rs1 = stoi(temp.substr(1, temp.size() - 1));
+
+			Returned = Returned + 0x23;
+			Returned += ((offset&0x1F)<< 7);
+			Returned += (get<1>(Memory_L[i]) << 12);
+			Returned += (rs1 << 15);
+			Returned += (rs2 << 20);
+			Returned += ((offset & 0xFE0) << 25);
+
+		}
+
+	}
+	//Branch 
+	tuple <string, int> Branch_I[6] =
+	{
+		make_tuple("beq", 0),
+		make_tuple("bne", 1),
+		make_tuple("blt", 4),
+		make_tuple("bge", 5),
+		make_tuple("bltu", 6),
+		make_tuple("bgeu", 7)
+	};
+
+	for (size_t i = 0; i < 6 && !Assembled; i++)
+	{
+		if (Operator == get<0>(Branch_I[i]))
+		{
+			Assembled = true;
+			string Tokens[2]; 
+			int intTokens[2]; 
+			string LabelName;
+			int relativeAddress; 
+			for (size_t j = 0; j < 2; j++)
+			{
+				getline(stream, Tokens[j], ',');
+				intTokens[j] = stoi(Tokens[j].substr(1, Tokens[j].size() - 1));
+			}
+			stream >> LabelName;
+			bool done = false;
+			for (size_t i = 0; i <Labels.size()&&!done; i++)
+			{
+				if (Labels[i].name == LabelName)
+				{
+					if (Labels[i].location - pc < 0)
+						relativeAddress = Sext(Labels[i].location - pc < 0); 
+					else
+						relativeAddress = Labels[i].location - pc < 0;
+					done = true;
+				}
+			}
+			if (!done)
+			{
+				Error(); 
+			}
+			else
+			{
+				Returned += 0x63;
+				Returned += (((relativeAddress & 0x1E) + ((relativeAddress & 0x800) >> 11))<<7);
+				Returned += (get<1>(Branch_I[i]) << 12);
+				Returned += (intTokens[0] << 15);
+				Returned += (intTokens[1] << 20);
+				Returned += ((((relativeAddress & 0x7E0)>>5) + ((relativeAddress & 0x1000) >> 6)) << 25);
+			}
+		}
+	}
+	//I_Format
+	tuple <string, int> IType_1[6] =
+	{
+		make_tuple("addi", 0),
+		make_tuple("slti", 2),
+		make_tuple("sltiu", 3),
+		make_tuple("xori", 4),
+		make_tuple("ori", 6), 
+		make_tuple("andi", 7)
+	};
+	for (size_t i = 0; i < 6 && !Assembled; i++)
+	{
+		if (Operator == get<0>(IType_1[i]))
+		{
+			Assembled = true;
+			int rd, rs1;
+			int imm;
+			string temp;
+			getline(stream, temp, ',');
+			rd = stoi(temp.substr(1, temp.size() - 1));
+			getline(stream, temp, ',');
+			rs1 = stoi(temp.substr(1, temp.size() - 1));
+			getline(stream, temp);
+			imm = stoi(temp);
+
+			Returned = Returned + 0x13;
+			Returned += (rd << 7);
+			Returned += (get<1>(IType_1[i]) << 12);
+			Returned += (rs1 << 15);
+			Returned += (imm << 20);
+		}
+	}
+
+	tuple <string, int, int> IType_2[3] =
+	{
+		make_tuple("slli", 1, 0),
+		make_tuple("srli", 5, 0),
+		make_tuple("srai", 5, 0b0100000)
+	};
+	for (size_t i = 0; i < 3 && !Assembled; i++)
+	{
+		if (Operator == get<0>(IType_2[i]))
+		{
+			Assembled = true;
+			int rd, rs1;
+			int shamt;
+			string temp;
+			getline(stream, temp, ',');
+			rd = stoi(temp.substr(1, temp.size() - 1));
+			getline(stream, temp, ',');
+			rs1 = stoi(temp.substr(1, temp.size() - 1));
+			getline(stream, temp);
+			shamt = stoi(temp);
+
+			Returned = Returned + 0x13;
+			Returned += (rd << 7);
+			Returned += (get<1>(Memory_L[i]) << 12);
+			Returned += (rs1 << 15);
+			Returned += (shamt << 20);
+			Returned += (get<1>(Memory_L[2]) << 25);
+		}
+	}
+
+	//Specials
+	if (!Assembled)
+	{
+		Assembled = true;
+		if (Operator == "ecall"|| Operator == "ECALL")
+		{
+			Returned = 0x73;
+		}
+		else if (Operator == "lui")
+		{
+			int rd, imm; 
+			string temp;
+			getline(stream, temp, ',');
+			rd = stoi(temp.substr(1, temp.size() - 1));
+			getline(stream, temp);
+			imm = stoi(temp);
+			Returned += 0b0110111;
+			Returned += (rd << 7); 
+			Returned += (imm << 12);
+
+		}
+		else if(Operator == "auipc")
+		{
+			int rd, imm;
+			string temp;
+			getline(stream, temp, ',');
+			rd = stoi(temp.substr(1, temp.size() - 1));
+			getline(stream, temp);
+			imm = stoi(temp);
+			Returned += 0b0010111;
+			Returned += (rd << 7);
+			Returned += (imm << 12);
+		}
+		else if(Operator == "jal")
+		{
+			int rd;
+			string temp;
+			string LabelName;
+			int relativeAddress;
+			getline(stream, temp, ',');
+			rd = stoi(temp.substr(1, temp.size() - 1));
+
+			getline(stream, LabelName);
+			bool done = false;
+			for (size_t i = 0; i < Labels.size() && !done; i++)
+			{
+				if (Labels[i].name == LabelName)
+				{
+					if (Labels[i].location - pc < 0)
+						relativeAddress = Sext(Labels[i].location - pc < 0);
+					else
+						relativeAddress = Labels[i].location - pc < 0;
+					done = true;
+				}
+			}
+			int immToSend = ((relativeAddress & 0x100000) + ((relativeAddress & 0x7FE) << 9) + ((relativeAddress & 0x800) >>2)+ ((relativeAddress & 0xFF000) >> 11)) >> 1;
+			Returned += 0b1101111;
+			Returned += (rd << 7);
+			Returned += (immToSend << 12);
+		}
+		else if(Operator == "jalr")
+		{
+			int rd, rs1, imm;
+			string temp;
+			getline(stream, temp, ',');
+			rd = stoi(temp.substr(1, temp.size() - 1));
+			getline(stream, temp, ',');
+			rs1 = stoi(temp.substr(1, temp.size() - 1));
+			getline(stream, temp);
+			imm = stoi(temp);
+			Returned += 0b1100111;
+			Returned += (rd << 7);
+			Returned += (rs1 << 15);
+			Returned += (imm << 20);
+
+		}
+	}
 
 	return Returned;
 }
