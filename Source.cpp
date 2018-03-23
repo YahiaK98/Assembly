@@ -324,7 +324,6 @@ int Assemble(string Text)
 			rs1 = stoi(temp.substr(1, temp.size() - 1));
 			stream >> temp;
 			imm = GetImm(temp);
-<<<<<<< HEAD
 
 			Returned = Returned + 0x13;
 			Returned += (rd << 7);
@@ -436,119 +435,6 @@ int Assemble(string Text)
 			Returned += (rs1 << 15);
 			Returned += (imm << 20);
 
-=======
-
-			Returned = Returned + 0x13;
-			Returned += (rd << 7);
-			Returned += (get<1>(IType_1[i]) << 12);
-			Returned += (rs1 << 15);
-			Returned += (imm << 20);
-		}
-	}
-	//I_format2
-	tuple <string, int, int> IType_2[3] =
-	{
-		make_tuple("slli", 1, 0),
-		make_tuple("srli", 5, 0),
-		make_tuple("srai", 5, 0b0100000)
-	};
-	for (size_t i = 0; i < 3 && !Assembled; i++)
-	{
-		if (Operator == get<0>(IType_2[i]))
-		{
-			Assembled = true;
-			int rd, rs1;
-			int shamt;
-			string temp;
-			getline(stream, temp, ',');
-			rd = stoi(temp.substr(1, temp.size() - 1));
-			getline(stream, temp, ',');
-			rs1 = stoi(temp.substr(1, temp.size() - 1));
-			stream >> temp;
-			shamt = GetImm(temp);
-
-			Returned = Returned + 0b0010011;
-			Returned += (rd << 7);
-			Returned += (get<1>(IType_2[i]) << 12);
-			Returned += (rs1 << 15);
-			Returned += (shamt << 20);
-			Returned += (get<2>(IType_2[i]) << 25);
-		}
-	}
-
-	//Specials
-	if (!Assembled)
-	{
-		Assembled = true;
-		if (Operator == "ecall" || Operator == "ECALL")
-		{
-			Returned = 0x73;
-		}
-		else if (Operator == "lui")
-		{
-			int rd, imm;
-			string temp;
-			getline(stream, temp, ',');
-			rd = stoi(temp.substr(1, temp.size() - 1));
-			stream >> temp;
-			imm = GetImm(temp);
-			Returned += 0b0110111;
-			Returned += (rd << 7);
-			Returned += (imm << 12);
-
-		}
-		else if (Operator == "auipc")
-		{
-			int rd, imm;
-			string temp;
-			getline(stream, temp, ',');
-			rd = stoi(temp.substr(1, temp.size() - 1));
-			stream >> temp;
-			imm = GetImm(temp);
-			Returned += 0b0010111;
-			Returned += (rd << 7);
-			Returned += (imm << 12);
-		}
-		else if (Operator == "jal")
-		{
-			int rd;
-			string temp;
-			string LabelName;
-			int relativeAddress;
-			getline(stream, temp, ',');
-			rd = stoi(temp.substr(1, temp.size() - 1));
-
-			stream >> LabelName;
-			bool done = false;
-			for (size_t i = 0; i < Labels.size() && !done; i++)
-			{
-				if (Labels[i].name == LabelName)
-				{
-					relativeAddress = Labels[i].location - pc;
-					done = true;
-				}
-			}
-			int immToSend = ((relativeAddress & 0x100000) + ((relativeAddress & 0x7FE) << 9) + ((relativeAddress & 0x800) >> 2) + ((relativeAddress & 0xFF000) >> 11)) >> 1;
-			Returned += 0b1101111;
-			Returned += (rd << 7);
-			Returned += (immToSend << 12);
-		}
-		else if (Operator == "jalr")
-		{
-			int rd, rs1, imm;
-			string temp;
-			getline(stream, temp, ',');
-			rd = stoi(temp.substr(1, temp.size() - 1));
-			getline(stream, temp, ',');
-			rs1 = stoi(temp.substr(1, temp.size() - 1));
-			stream >> temp;
-			imm = GetImm(temp);
-			Returned += 0b1100111;
-			Returned += (rd << 7);
-			Returned += (rs1 << 15);
-			Returned += (imm << 20);
-
->>>>>>> 9d05721ab9a062bd6f8daecea21b8ffed95c6fbe
 		}
 	}
 
@@ -567,6 +453,7 @@ instruction Parse(int MachineCode)
 	Returned.opcode = (MachineCode & 0x0000007f);
 	return Returned;
 }
+
 
 void Execute(instruction inst)
 {
