@@ -32,44 +32,61 @@ struct label
 #pragma region Globals
 int registers[32] = { 0 };
 unsigned int pc = 0x0;
-char memory[8 * 1024];
+char memory[8 * 1024] = { 0 };
 vector<label> Labels;
+int ErrorCode = -1;
 #pragma endregion
 
 #pragma region Definitions
 int  GetImm(string temp);
 int Assemble(string Text);
+int FiveToMips(instruction);
+
 instruction Parse(int MachineCode);
-void Execute(instruction inst);
+
 bool readFile(string filename);
 bool IsInstruction(string temp);
+
+void Execute(instruction inst);
 void Run();
 void Error();
+void Output();
+void MipsConvert();
 #pragma endregion
 
 #pragma region Main
 int main() {
-	memset(memory, 0, 8 * 1024);
 	string file;
 	getline(cin, file);
+
 	if (!readFile(file))
+	{
+		ErrorCode = 0;
 		Error();
-	/*registers[1] = 1;
-	registers[2] = 2;
-	string test;
-	getline(cin, test);
-	int mach = Assemble(test);
-	cout << hex << mach << endl;
-	instruction parsed = Parse(mach);
-	Execute(parsed);
-	cout << registers[3] << endl;*/
+	} 
+	else
+	{
+		Run(); 
+		Output();
+	}
 	system("pause");
 	return 0;
 }
 
 void Error()
 {
+	//TODO: create global errorstate variable and handle errors throughout functions and switch on error to give feedback to user and exit program
+}
 
+void Output()
+{
+	//TODO: Output the state of all registers, Memorydata, Machine code [Riscv and Mips] 
+	//TODO: Output in files and cmd
+}
+
+void MipsConvert()
+{
+	//TODO: main function to handle all the conversion from riscv to mips.. initializes pc.. loops over all the memory calls Five to mips after parsing instructions
 }
 
 bool readFile(string filename)
@@ -105,11 +122,11 @@ bool readFile(string filename)
 			if (IsInstruction(temp))
 			{
 				int machine = Assemble(temp);
-				cout << hex << machine << endl;
-				memory[pc] = machine & 0xFF000000;
-				memory[pc + 1] = machine & 0x00FF0000;
-				memory[pc + 2] = machine & 0x0000FF00;
-				memory[pc + 3] = machine & 0x000000FF;
+				//cout << hex << machine << endl;
+				memory[pc] = (machine & 0xFF000000)>>24;
+				memory[pc + 1] = (machine & 0x00FF0000)>>16;
+				memory[pc + 2] = (machine & 0x0000FF00)>>8;
+				memory[pc + 3] = (machine & 0x000000FF);
 				pc += 4;
 			}
 		}
@@ -126,12 +143,26 @@ bool readFile(string filename)
 
 void Run()
 {
-	while (memory[pc] != 0)
+	int machine;
+	pc = 0x0;
+	do 
 	{
-		int machine = ((memory[pc]) << 24) + ((memory[pc + 1]) << 16) + ((memory[pc + 2]) << 8) + ((memory[pc + 3]));
-		Execute(Parse(machine));
+		pc += 4;
+		
+		 int part1 = (((memory[pc - 4]) << 24)&0xFF000000);
+		 int part2 = (((memory[pc - 3]) << 16) & 0x00FF0000);
+		 int part3 = (((memory[pc - 2]) << 8) & 0x0000FF00);
+		 int part4 = ((memory[pc - 1]) & 0x000000FF);
+
+		machine= (part1 + part2 + part3 + part4);
+		if (machine)
+		{
+			instruction ToBeExecuted = Parse(machine);
+			Execute(ToBeExecuted);
+		}
 		//pc += 4; -> To be handled inside for some instructions bywado el PC amaken tanya
-	}
+	} while (machine != 0);
+	cout << "Done" << endl;
 }
 #pragma endregion
 
@@ -441,6 +472,13 @@ int Assemble(string Text)
 	return Returned;
 }
 
+int FiveToMips(instruction Parsed)
+{
+	//TODO: Converts given instruction to Mips format 
+	//Similar to Execute function in terms of skeleton
+	return 1;
+}
+
 instruction Parse(int MachineCode)
 {
 	//7-5-5-3-5-7
@@ -453,7 +491,6 @@ instruction Parse(int MachineCode)
 	Returned.opcode = (MachineCode & 0x0000007f);
 	return Returned;
 }
-
 
 void Execute(instruction inst)
 {
