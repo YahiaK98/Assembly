@@ -457,6 +457,12 @@ instruction Parse(int MachineCode)
 
 void Execute(instruction inst)
 {
+	int signed_bit;
+	int immediate;
+	unsigned int immediateU;
+	signed int offset;
+	int value;
+	int address;
 	// Executing instructions
 	if (inst.opcode == 0x33)
 	{
@@ -491,7 +497,6 @@ void Execute(instruction inst)
 				registers[inst.rd] = (registers[inst.rs1]) >> (registers[inst.rs2] & 0x0000001F); // SRL
 			else
 			{	// SRA	
-				int signed_bit;
 				signed_bit = registers[inst.rs1] & 0x80000000;
 				int shamt = registers[inst.rs2] & 0x0000001F;
 				if (signed_bit)
@@ -542,7 +547,6 @@ void Execute(instruction inst)
 				registers[inst.rd] = registers[inst.rs1] >> inst.rs2; // SRLI
 			else
 			{	// SRAI	
-				int signed_bit;
 				signed_bit = registers[inst.rs1] & 0x80000000;
 				int shamt = inst.rs2;
 				if (signed_bit)
@@ -565,14 +569,14 @@ void Execute(instruction inst)
 	}
 	else if (inst.opcode == 0x37) // LUI
 	{
-		int immediate = (inst.funct7 << 5) + inst.rs2;
+		immediate = (inst.funct7 << 5) + inst.rs2;
 		immediate = (immediate << 5) + inst.rs1;
 		immediate = (immediate << 3) + inst.funct3;
 		registers[inst.rd] = immediate << 12;
 	}
 	else if (inst.opcode == 0x17) // AUIPC
 	{
-		int immediate = (inst.funct7 << 5) + inst.rs2;
+		immediate = (inst.funct7 << 5) + inst.rs2;
 		immediate = (immediate << 5) + inst.rs1;
 		immediate = (immediate << 3) + inst.funct3;
 		immediate = immediate << 12;
@@ -581,7 +585,7 @@ void Execute(instruction inst)
 	}
 	else if (inst.opcode == 0x6F) // JAL -- CHECK
 	{
-		signed int offset = inst.funct7 >> 6; // imm[20]
+		offset = inst.funct7 >> 6; // imm[20]
 		offset = (offset << 8) + ((inst.rs1 << 3) + inst.funct3); // imm[19:12]
 		offset = (offset << 1) + ((inst.rs2 & 0x1)); // imm[11]
 		offset = (offset << 10) + (((inst.funct7 & 0x3F) << 4) + (inst.rs2 >> 1));
@@ -602,7 +606,7 @@ void Execute(instruction inst)
 		case 0: // BEQ
 			if (registers[inst.rs1] == registers[inst.rs2])
 			{
-				signed int immediate = inst.funct7 >> 6; // imm[12]
+				immediate = inst.funct7 >> 6; // imm[12]
 				immediate = (immediate << 1) + (inst.rd & 0x1); // imm[11]
 				immediate = (immediate << 6) + (inst.funct7 & 0x3F); // imm[10:5]
 				immediate = (immediate << 4) + (inst.rd >> 1); // imm[4:1]
@@ -612,7 +616,7 @@ void Execute(instruction inst)
 		case 1: // BNE
 			if (registers[inst.rs1] != registers[inst.rs2])
 			{
-				signed int immediate = inst.funct7 >> 6; // imm[12]
+				immediate = inst.funct7 >> 6; // imm[12]
 				immediate = (immediate << 1) + (inst.rd & 0x1); // imm[11]
 				immediate = (immediate << 6) + (inst.funct7 & 0x3F); // imm[10:5]
 				immediate = (immediate << 4) + (inst.rd >> 1); // imm[4:1]
@@ -622,7 +626,7 @@ void Execute(instruction inst)
 		case 4: // BLT
 			if (registers[inst.rs1] < registers[inst.rs2])
 			{
-				signed int immediate = inst.funct7 >> 6; // imm[12]
+				immediate = inst.funct7 >> 6; // imm[12]
 				immediate = (immediate << 1) + (inst.rd & 0x1); // imm[11]
 				immediate = (immediate << 6) + (inst.funct7 & 0x3F); // imm[10:5]
 				immediate = (immediate << 4) + (inst.rd >> 1); // imm[4:1]
@@ -632,7 +636,7 @@ void Execute(instruction inst)
 		case 5: // BGE
 			if (registers[inst.rs1] >= registers[inst.rs2])
 			{
-				signed int immediate = inst.funct7 >> 6; // imm[12]
+				immediate = inst.funct7 >> 6; // imm[12]
 				immediate = (immediate << 1) + (inst.rd & 0x1); // imm[11]
 				immediate = (immediate << 6) + (inst.funct7 & 0x3F); // imm[10:5]
 				immediate = (immediate << 4) + (inst.rd >> 1); // imm[4:1]
@@ -642,21 +646,21 @@ void Execute(instruction inst)
 		case 6: // BLTU -- CHECK
 			if (registers[inst.rs1] < registers[inst.rs2])
 			{
-				unsigned int immediate = inst.funct7 >> 6; // imm[12]
-				immediate = (immediate << 1) + (inst.rd & 0x1); // imm[11]
-				immediate = (immediate << 6) + (inst.funct7 & 0x3F); // imm[10:5]
-				immediate = (immediate << 4) + (inst.rd >> 1); // imm[4:1]
-				pc += immediate; // CURRENT pc
+				immediateU = inst.funct7 >> 6; // imm[12]
+				immediateU = (immediateU << 1) + (inst.rd & 0x1); // imm[11]
+				immediateU = (immediateU << 6) + (inst.funct7 & 0x3F); // imm[10:5]
+				immediateU = (immediateU << 4) + (inst.rd >> 1); // imm[4:1]
+				pc += immediateU; // CURRENT pc
 			}
 			break;
 		case 7: // BGEU -- CHECK
 			if (registers[inst.rs1] >= registers[inst.rs2])
 			{
-				unsigned int immediate = inst.funct7 >> 6; // imm[12]
-				immediate = (immediate << 1) + (inst.rd & 0x1); // imm[11]
-				immediate = (immediate << 6) + (inst.funct7 & 0x3F); // imm[10:5]
-				immediate = (immediate << 4) + (inst.rd >> 1); // imm[4:1]
-				pc += immediate; // CURRENT pc
+				immediateU = inst.funct7 >> 6; // imm[12]
+				immediateU = (immediateU << 1) + (inst.rd & 0x1); // imm[11]
+				immediateU = (immediateU << 6) + (inst.funct7 & 0x3F); // imm[10:5]
+				immediateU = (immediateU << 4) + (inst.rd >> 1); // imm[4:1]
+				pc += immediateU; // CURRENT pc
 			}
 			break;
 		}
@@ -666,14 +670,14 @@ void Execute(instruction inst)
 		switch (inst.funct3)
 		{
 		case 0:	// LB 
-			signed int offset = (inst.funct7 << 5) + inst.rs2; // 12 bits
-			int signed_bit = offset >> 11;
+			offset = (inst.funct7 << 5) + inst.rs2; // 12 bits
+			signed_bit = offset >> 11;
 			if (signed_bit) // sign extension
 				offset = offset | 0xFFFFF000;
 			else
 				offset = offset & 0x00000FFF;
-			int address = offset + registers[inst.rs1]; // base + offset
-			int value = memory[address]; // taking 8 bits
+			address = offset + registers[inst.rs1]; // base + offset
+			value = memory[address]; // taking 8 bits
 			signed_bit = value >> 7;
 			if (signed_bit) // sign extension
 				value = value | 0xFFFFFF00;
@@ -682,14 +686,14 @@ void Execute(instruction inst)
 			registers[inst.rd] = value; // loading into rd
 			break;
 		case 1: // LH
-			signed int offset = (inst.funct7 << 5) + inst.rs2; // 12 bits
-			int signed_bit = offset >> 11;
+			offset = (inst.funct7 << 5) + inst.rs2; // 12 bits
+			signed_bit = offset >> 11;
 			if (signed_bit) // sign extension
 				offset = offset | 0xFFFFF000;
 			else
 				offset = offset & 0x00000FFF;
-			int address = offset + registers[inst.rs1]; // base + offset
-			int value = memory[address]; // first 8 bits
+			address = offset + registers[inst.rs1]; // base + offset
+			value = memory[address]; // first 8 bits
 			value = (value << 8) + memory[address + 1];
 			signed_bit = value >> 15;
 			if (signed_bit)
@@ -699,40 +703,40 @@ void Execute(instruction inst)
 			registers[inst.rd] = value;
 			break;
 		case 2: // LW
-			signed int offset = (inst.funct7 << 5) + inst.rs2; // 12 bits
-			int signed_bit = offset >> 11;
+			offset = (inst.funct7 << 5) + inst.rs2; // 12 bits
+			signed_bit = offset >> 11;
 			if (signed_bit) // sign extension
 				offset = offset | 0xFFFFF000;
 			else
 				offset = offset & 0x00000FFF;
-			int address = offset + registers[inst.rs1]; // base + offset
-			int value = memory[address]; // first 8 bits
+			address = offset + registers[inst.rs1]; // base + offset
+			value = memory[address]; // first 8 bits
 			value = (value << 8) + memory[address + 1];
 			value = (value << 8) + memory[address + 2];
 			value = (value << 8) + memory[address + 3];
 			registers[inst.rd] = value;
 			break;
 		case 4: // LBU
-			signed int offset = (inst.funct7 << 5) + inst.rs2; // 12 bits
-			int signed_bit = offset >> 11;
+			offset = (inst.funct7 << 5) + inst.rs2; // 12 bits
+			signed_bit = offset >> 11;
 			if (signed_bit) // sign extension
 				offset = offset | 0xFFFFF000;
 			else
 				offset = offset & 0x00000FFF;
-			int address = offset + registers[inst.rs1]; // base + offset
-			int value = memory[address]; // taking 8 bits
+			address = offset + registers[inst.rs1]; // base + offset
+			value = memory[address]; // taking 8 bits
 			value = value & 0x000000FF; // zero extension
 			registers[inst.rd] = value; // loading into rd
 			break;
 		case 5: // LHU
-			signed int offset = (inst.funct7 << 5) + inst.rs2; // 12 bits
-			int signed_bit = offset >> 11;
+			offset = (inst.funct7 << 5) + inst.rs2; // 12 bits
+			signed_bit = offset >> 11;
 			if (signed_bit) // sign extension
 				offset = offset | 0xFFFFF000;
 			else
 				offset = offset & 0x00000FFF;
-			int address = offset + registers[inst.rs1]; // base + offset
-			int value = memory[address]; // first 8 bits
+			address = offset + registers[inst.rs1]; // base + offset
+			value = memory[address]; // first 8 bits
 			value = (value << 8) + memory[address + 1];
 			value = value & 0x0000FFFF; // zero extension
 			registers[inst.rd] = value;
@@ -744,23 +748,23 @@ void Execute(instruction inst)
 		switch (inst.funct3)
 		{
 		case 0: // SB
-			signed int offset = (inst.funct7 << 5) + inst.rd;
-			int signed_bit = offset >> 11;
+			offset = (inst.funct7 << 5) + inst.rd;
+			signed_bit = offset >> 11;
 			if (signed_bit) // sign extension
 				offset = offset | 0xFFFFF000;
 			else
 				offset = offset & 0x00000FFF;
-			int address = offset + registers[inst.rs1];
+			address = offset + registers[inst.rs1];
 			memory[address] = registers[inst.rs2] & 0x000000FF; // storing lower 8 bits
 			break;
 		case 1: // SH
-			signed int offset = (inst.funct7 << 5) + inst.rd;
-			int signed_bit = offset >> 11;
+			offset = (inst.funct7 << 5) + inst.rd;
+			signed_bit = offset >> 11;
 			if (signed_bit) // sign extension
 				offset = offset | 0xFFFFF000;
 			else
 				offset = offset & 0x00000FFF;
-			int address = offset + registers[inst.rs1];
+			address = offset + registers[inst.rs1];
 			if (address % 2 == 1) // aligned on multiples of 2
 				address += 1;
 			// storing lowest 16 bits
@@ -769,13 +773,13 @@ void Execute(instruction inst)
 			break;
 
 		case 2: // SW
-			signed int offset = (inst.funct7 << 5) + inst.rd;
-			int signed_bit = offset >> 11;
+			offset = (inst.funct7 << 5) + inst.rd;
+			signed_bit = offset >> 11;
 			if (signed_bit) // sign extension
 				offset = offset | 0xFFFFF000;
 			else
 				offset = offset & 0x00000FFF;
-			int address = offset + registers[inst.rs1];
+			address = offset + registers[inst.rs1];
 			if (address % 4 == 1) // Aligned on multiples of 4
 				address += 3;
 			else if (address % 4 == 2)
@@ -799,7 +803,7 @@ void Execute(instruction inst)
 		else if (registers[10] == 4) // printing a null-terminated string
 		{
 			bool null_reached = false;
-			int address = registers[11]; // address of null-terminated string
+			address = registers[11]; // address of null-terminated string
 			while (!null_reached)
 			{
 				char temp = memory[address];
