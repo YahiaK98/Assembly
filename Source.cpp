@@ -466,7 +466,7 @@ void Execute(instruction inst)
 			if (inst.funct7 == 32)
 				registers[inst.rd] = registers[inst.rs1] - registers[inst.rs2]; // SUB
 			else
-				registers[inst.rd] = registers[inst.rs1] + registers[inst.rs2]; // ADDs
+				registers[inst.rd] = registers[inst.rs1] + registers[inst.rs2]; // ADD
 			break;
 		case 1:
 			registers[inst.rd] = (registers[inst.rs1]) << (registers[inst.rs2] & 0x0000001F); // SLL (lower 5 bits)
