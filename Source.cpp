@@ -10,6 +10,7 @@
 #include <sstream>
 #include <tuple>
 #include <cstdlib>
+#include <conio.h>
 using namespace std;
 #pragma endregion
 
@@ -18,8 +19,7 @@ struct instruction
 {
 	string text;
 	unsigned int MachineCode;
-	unsigned int rd, rs1, rs2, funct3, funct7, opcode; //homa dool
-													   //Immediates combined/expanded from homa dool
+	unsigned int rd, rs1, rs2, funct3, funct7, opcode; 												   
 	unsigned int UJ_imm, SB_imm;
 };
 
@@ -35,6 +35,7 @@ int registers[32] = { 0 };
 unsigned int pc = 0x0;
 char memory[8 * 1024] = { 0 };
 vector<label> Labels;
+vector<string> OutputStrings;
 int ErrorCode = -1;
 #pragma endregion
 
@@ -48,6 +49,7 @@ instruction Parse(int MachineCode);
 bool readFile(string filename);
 bool IsInstruction(string temp);
 
+void OutputOutputs();
 void Execute(instruction inst, bool & finished);
 void Run();
 void Error();
@@ -70,7 +72,7 @@ int main() {
 	else
 	{
 		Run();
-		Output();
+		OutputOutputs();
 	}
 	system("pause");
 	return 0;
@@ -81,12 +83,6 @@ void Error()
 	//TODO: create global errorstate variable and handle errors throughout functions and switch on error to give feedback to user and exit program
 }
 
-void Output()
-{
-	//TODO: Output the state of all registers, Memorydata, Machine code [Riscv and Mips] 
-	//TODO: Output in files and cmd
-}
-
 void MipsConvert()
 {
 	//TODO: main function to handle all the conversion from riscv to mips.. initializes pc.. loops over all the memory calls Five to mips after parsing instructions
@@ -94,8 +90,13 @@ void MipsConvert()
 
 bool readFile(string filename)
 {
+	ofstream OutFile;
+	string outfilename; 
 	ifstream Infile;
 	string temp;
+	outfilename = filename.substr(0, filename.size() - 2) + "_Out.bin";
+
+	OutFile.open(outfilename);
 	Infile.open(filename);
 	if (!Infile.fail())
 	{
@@ -105,7 +106,7 @@ bool readFile(string filename)
 		{
 			bool IsLabel = false;
 			getline(Infile, temp);
-			for (int i = 0; i<temp.size() && !IsLabel; i++)
+			for (unsigned int i = 0; i<temp.size() && !IsLabel; i++)
 				if (temp.at(i) == ':')
 				{
 					tempL.location = InstructionNo * 4;
@@ -125,6 +126,8 @@ bool readFile(string filename)
 			if (IsInstruction(temp))
 			{
 				int machine = Assemble(temp);
+				cout << "0x" << hex  << setw(8) << setfill('0') << machine << endl;
+				OutFile << "0x" << hex << setw(8) << setfill('0') << machine << endl;
 				memory[pc] = (machine & 0xFF000000)>>24;
 				memory[pc + 1] = (machine & 0x00FF0000)>>16;
 				memory[pc + 2] = (machine & 0x0000FF00)>>8;
@@ -148,20 +151,38 @@ void Run()
 	int machine;
 	pc = 0x0;
 	bool finished = false;
+	int choice = int('Y');
+
 	do 
 	{
-		pc += 4;
-		
-		 int part1 = (((memory[pc - 4]) << 24)&0xFF000000);
-		 int part2 = (((memory[pc - 3]) << 16) & 0x00FF0000);
-		 int part3 = (((memory[pc - 2]) << 8) & 0x0000FF00);
-		 int part4 = ((memory[pc - 1]) & 0x000000FF);
-
-		machine= (part1 + part2 + part3 + part4);
-		if (machine)
+		if (choice != int('c') && choice != int('C'))
 		{
-			instruction ToBeExecuted = Parse(machine);
-			Execute(ToBeExecuted, finished);
+			cout << "Execute next instruction? any key for next, N to terminate, C for continuous: ";
+			choice = _getch();
+		}
+
+		system("CLS");
+		Output();
+		
+		pc += 4;
+
+		int part1 = (((memory[pc - 4]) << 24) & 0xFF000000);
+		int part2 = (((memory[pc - 3]) << 16) & 0x00FF0000);
+		int part3 = (((memory[pc - 2]) << 8) & 0x0000FF00);
+		int part4 = ((memory[pc - 1]) & 0x000000FF);
+
+		machine = (part1 + part2 + part3 + part4);
+		if (choice!=int('N')&& choice != int('n'))
+		{
+			if (machine)
+			{
+				instruction ToBeExecuted = Parse(machine);
+				Execute(ToBeExecuted, finished);
+			}
+		}
+		else
+		{
+			finished = true;
 		}
 	} while (machine != 0&&!finished);
 
@@ -264,7 +285,7 @@ int Assemble(string Text)
 	};
 	for (size_t i = 0; i < 3 && !Assembled; i++)
 	{
-		if (Operator == get<0>(Memory_L[i]))
+		if (Operator == get<0>(Memory_S[i]))
 		{
 			Assembled = true;
 			int rs2, rs1;
@@ -279,7 +300,7 @@ int Assemble(string Text)
 
 			Returned = Returned + 0x23;
 			Returned += ((offset & 0x1F) << 7);
-			Returned += (get<1>(Memory_L[i]) << 12);
+			Returned += (get<1>(Memory_S[i]) << 12);
 			Returned += (rs1 << 15);
 			Returned += (rs2 << 20);
 			Returned += ((offset & 0xFE0) << 25);
@@ -488,15 +509,15 @@ int FiveToMips(instruction Parsed)
 
 instruction Parse(int MachineCode)
 {
-	//7-5-5-3-5-7
 	instruction Returned;
+	unsigned int part1, part2, part3, part4;
+
 	Returned.funct7 = ((MachineCode & 0xfe000000) >> 25);
 	Returned.rs2 = ((MachineCode & 0x01f00000) >> 20);
 	Returned.rs1 = ((MachineCode & 0x000f8000) >> 15);
 	Returned.funct3 = ((MachineCode & 0x00007000) >> 12);
 	Returned.rd = ((MachineCode & 0x00000f80) >> 7);
 	Returned.opcode = (MachineCode & 0x0000007f);
-	unsigned int part1, part2, part3, part4;
 	part1 = (((Returned.funct7) >> 6) << 20)&0x100000;
 	part2 = (MachineCode & 0xFF000);
 	part3 = (((MachineCode & 0x100000) >> 9)&0x800);
@@ -516,6 +537,9 @@ void Execute(instruction inst, bool & finished)
 	int signed_bit;
 	int immediate;
 	unsigned int immediateU;
+	unsigned int rs1U, rs2U;
+	unsigned int part1, part2, part3, part4;
+
 	signed int offset;
 	int value;
 	int address;
@@ -553,10 +577,9 @@ void Execute(instruction inst, bool & finished)
 			case 3:
 				if (inst.rd != 0)
 				{
-					unsigned int rs1, rs2;
-					rs1 = registers[inst.rs1];
-					rs2 = registers[inst.rs2];
-					if (rs1 < rs2) // SLTU -- CHECK
+					rs1U = registers[inst.rs1];
+					rs2U = registers[inst.rs2];
+					if (rs1U < rs2U) // SLTU -- CHECK
 						registers[inst.rd] = 1;
 					else
 						registers[inst.rd] = 0;
@@ -574,7 +597,7 @@ void Execute(instruction inst, bool & finished)
 					signed_bit = registers[inst.rs1] & 0x80000000;
 					unsigned int shamt = registers[inst.rs2] & 0x0000001F;
 					if (signed_bit)
-						for (int i = 0; i < shamt; i++)
+						for (unsigned int i = 0; i < shamt; i++)
 						{
 							registers[inst.rd] = registers[inst.rs1] >> 1;
 							registers[inst.rd] = registers[inst.rd] | 0x80000000;
@@ -631,7 +654,8 @@ void Execute(instruction inst, bool & finished)
 				break;
 			case 3:
 				immediateU = ((inst.funct7 << 5) + inst.rs2)&0xFFF;
-				if ((registers[inst.rs1]) <immediateU) // SLTIU -- CHECK
+				rs1U = (registers[inst.rs1]);
+				if (rs1U <immediateU) // SLTIU -- CHECK
 					registers[inst.rd] = 1;
 				else
 					registers[inst.rd] = 0;
@@ -662,7 +686,7 @@ void Execute(instruction inst, bool & finished)
 					signed_bit = (registers[inst.rs1] & 0x80000000)>>31;
 					unsigned int shamt = inst.rs2;
 					if (signed_bit)
-						for (int i = 0; i < shamt; i++)
+						for (unsigned int i = 0; i < shamt; i++)
 						{
 							registers[inst.rd] = registers[inst.rs1] >> 1;
 							registers[inst.rd] = registers[inst.rd] | 0x80000000;
@@ -795,18 +819,30 @@ void Execute(instruction inst, bool & finished)
 			}
 			break;
 		case 6: // BLTU -- CHECK
-			if (registers[inst.rs1] < registers[inst.rs2])
+			rs1U = registers[inst.rs1]; 
+			rs2U = registers[inst.rs2];
+			if (rs1U< rs2U)
 			{
-				immediateU = inst.SB_imm;
-				pc += immediateU; // CURRENT pc
+				immediate = inst.SB_imm;
+				signed_bit = immediate >> 12;
+				immediate = immediate & 0x1FFF;
+				if (signed_bit)
+					immediate = immediate | 0xFFFFF000;
+				pc += immediate; // CURRENT pc
 				pc -= 4;
 			}
 			break;
 		case 7: // BGEU -- CHECK
-			if (registers[inst.rs1] >= registers[inst.rs2])
+			rs1U = registers[inst.rs1];
+			rs2U = registers[inst.rs2];
+			if (rs1U >= rs2U)
 			{
-				immediateU = inst.SB_imm;
-				pc += immediateU; // CURRENT pc
+				immediate = inst.SB_imm;
+				signed_bit = immediate >> 12;
+				immediate = immediate & 0x1FFF;
+				if (signed_bit)
+					immediate = immediate | 0xFFFFF000;
+				pc += immediate; // CURRENT pc
 				pc -= 4;
 			}
 			break;
@@ -819,77 +855,89 @@ void Execute(instruction inst, bool & finished)
 		case 0:	// LB 
 			offset = (inst.funct7 << 5) + inst.rs2; // 12 bits
 			signed_bit = offset >> 11;
+			offset = offset & 0x00000FFF;
+
 			if (signed_bit) // sign extension
 				offset = offset | 0xFFFFF000;
-			else
-				offset = offset & 0x00000FFF;
+
 			address = offset + registers[inst.rs1]; // base + offset
 			value = memory[address]; // taking 8 bits
 			signed_bit = value >> 7;
+			value = value & 0x000000FF;
 			if (signed_bit) // sign extension
 				value = value | 0xFFFFFF00;
-			else
-				value = value & 0x000000FF;
+
 			if (inst.rd != 0)
 				registers[inst.rd] = value; // loading into rd
 			break;
 		case 1: // LH
 			offset = (inst.funct7 << 5) + inst.rs2; // 12 bits
 			signed_bit = offset >> 11;
+			offset = offset & 0x00000FFF;
+
 			if (signed_bit) // sign extension
 				offset = offset | 0xFFFFF000;
-			else
-				offset = offset & 0x00000FFF;
+
 			address = offset + registers[inst.rs1]; // base + offset
-			value = memory[address]; // first 8 bits
-			value = (value << 8) + memory[address + 1];
+			unsigned int part1, part2;
+			part1 = ((memory[address]&0xff)<<8)&0xff00; // first 8 bits
+			part2 =  (memory[address + 1]) & 0xff;
+			value = part1 + part2;
 			signed_bit = value >> 15;
+			value = value & 0x0000FFFF;
+
 			if (signed_bit)
 				value = value | 0xFFFF0000;
-			else
-				value = value & 0x0000FFFF;
+
 			if (inst.rd != 0)
 				registers[inst.rd] = value;
 			break;
 		case 2: // LW
 			offset = (inst.funct7 << 5) + inst.rs2; // 12 bits
 			signed_bit = offset >> 11;
+			offset = offset & 0x00000FFF;
+
 			if (signed_bit) // sign extension
 				offset = offset | 0xFFFFF000;
-			else
-				offset = offset & 0x00000FFF;
+
 			address = offset + registers[inst.rs1]; // base + offset
-			value = memory[address]; // first 8 bits
-			value = (value << 8) + memory[address + 1];
-			value = (value << 8) + memory[address + 2];
-			value = (value << 8) + memory[address + 3];
+			part1 = ((memory[address] & 0xff) << 24) & 0xff000000; // first 8 bits
+			part2 = ((memory[address+1] & 0xff) << 16) & 0x00ff0000; 
+			part3 = ((memory[address+2] & 0xff) << 8) & 0x0000ff00; 
+			part4 = ((memory[address+3] & 0xff)) & 0xff; 
+			value = part1 + part2 + part3 + part4;
 			if (inst.rd != 0)
 				registers[inst.rd] = value;
 			break;
 		case 4: // LBU
 			offset = (inst.funct7 << 5) + inst.rs2; // 12 bits
 			signed_bit = offset >> 11;
+			offset = offset & 0x00000FFF;
+
 			if (signed_bit) // sign extension
 				offset = offset | 0xFFFFF000;
-			else
-				offset = offset & 0x00000FFF;
+
 			address = offset + registers[inst.rs1]; // base + offset
 			value = memory[address]; // taking 8 bits
-			value = value & 0x000000FF; // zero extension
+			value = value & 0x000000FF;
+
 			if (inst.rd != 0)
 				registers[inst.rd] = value; // loading into rd
 			break;
 		case 5: // LHU
 			offset = (inst.funct7 << 5) + inst.rs2; // 12 bits
 			signed_bit = offset >> 11;
+			offset = offset & 0x00000FFF;
+
 			if (signed_bit) // sign extension
 				offset = offset | 0xFFFFF000;
-			else
-				offset = offset & 0x00000FFF;
+
 			address = offset + registers[inst.rs1]; // base + offset
-			value = memory[address]; // first 8 bits
-			value = (value << 8) + memory[address + 1];
-			value = value & 0x0000FFFF; // zero extension
+			part1 = ((memory[address] & 0xff) << 8) & 0xff00; // first 8 bits
+			part2 = (memory[address + 1]) & 0xff;
+			value = part1 + part2;
+			value = value & 0x0000FFFF;
+
 			if (inst.rd != 0)
 				registers[inst.rd] = value;
 			break;
@@ -902,25 +950,23 @@ void Execute(instruction inst, bool & finished)
 		case 0: // SB
 			offset = (inst.funct7 << 5) + inst.rd;
 			signed_bit = offset >> 11;
+			offset = offset & 0x00000FFF;
+
 			if (signed_bit) // sign extension
 				offset = offset | 0xFFFFF000;
-			else
-				offset = offset & 0x00000FFF;
+
 			address = offset + registers[inst.rs1];
-			memory[address] = registers[inst.rs2] & 0x000000FF; // storing lower 8 bits
+			memory[address] = (registers[inst.rs2] & 0xFF); // storing lower 8 bits
 			break;
 		case 1: // SH
 			offset = (inst.funct7 << 5) + inst.rd;
 			signed_bit = offset >> 11;
+			offset = offset & 0x00000FFF;
+
 			if (signed_bit) // sign extension
 				offset = offset | 0xFFFFF000;
-			else
-				offset = offset & 0x00000FFF;
 			address = offset + registers[inst.rs1];
-			/*if (address % 2 == 1) // aligned on multiples of 2
-				address += 1;*/
-			//address assumed to be hardcoded
-			// storing lowest 16 bits
+
 			memory[address] = (registers[inst.rs2] & 0x0000FF00) >> 8;
 			memory[address + 1] = registers[inst.rs2] & 0x000000FF;
 			break;
@@ -928,19 +974,12 @@ void Execute(instruction inst, bool & finished)
 		case 2: // SW
 			offset = (inst.funct7 << 5) + inst.rd;
 			signed_bit = offset >> 11;
+			offset = offset & 0x00000FFF;
+
 			if (signed_bit) // sign extension
 				offset = offset | 0xFFFFF000;
-			else
-				offset = offset & 0x00000FFF;
+
 			address = offset + registers[inst.rs1];
-			/*
-			if (address % 4 == 1) // Aligned on multiples of 4
-				address += 3;
-			else if (address % 4 == 2)
-				address += 2;
-			else if (address % 4 == 3)
-				address += 1;*/
-			//address assumed to be hardcoded
 
 			memory[address] = (registers[inst.rs2] & 0xFF000000) >> 24;
 			memory[address + 1] = (registers[inst.rs2] & 0x00FF0000) >> 16;
@@ -954,10 +993,14 @@ void Execute(instruction inst, bool & finished)
 		// ECALL, checking x10
 		if (registers[10] == 1) // printing integer
 		{
-			cout << registers[11];
+			cout << "OUTPUT: " << registers[11];
+			stringstream ss; 
+			ss << registers[11];
+			OutputStrings.push_back(ss.str());
 		}
 		else if (registers[10] == 4) // printing a null-terminated string
 		{
+			string OutputStr = "";
 			bool null_reached = false;
 			address = registers[11]; // address of null-terminated string
 			while (!null_reached)
@@ -966,9 +1009,11 @@ void Execute(instruction inst, bool & finished)
 				if (temp == '\0')
 					null_reached = true;
 				else
-					cout << temp;
+					OutputStr += to_string(temp);
 				address++;
 			}
+			cout <<"OUTPUT: "<< OutputStr << endl;
+			OutputStrings.push_back(OutputStr);
 		}
 		else if (registers[10] == 5) // reading an integer
 		{
@@ -985,9 +1030,30 @@ void Execute(instruction inst, bool & finished)
 #pragma endregion
 
 #pragma region Helpers
+void OutputOutputs()
+{
+	cout << "Final Output States: " << endl;
+
+	for (size_t i = 0; i < OutputStrings.size(); i++)
+	{
+		cout << left << setfill('_') << "Output" << setw(2) << i << ":";
+		cout << OutputStrings.at(i) << endl;
+	}
+}
+
+void Output()
+{
+	cout << "Registers States Now: " << endl;
+	for (unsigned int i = 0; i < 32; i++)
+	{
+		cout << left << setfill('_') << "x" << setw(2) << i << ":";
+		cout << right << dec << setw(8) << registers[i] << endl;
+	}
+}
+
 bool IsInstruction(string temp)
 {
-	for (int i = 0; i < temp.size(); i++)
+	for (unsigned int i = 0; i < temp.size(); i++)
 	{
 		if (temp[i] == ':')
 			return false;
