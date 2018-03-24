@@ -20,6 +20,7 @@ struct instruction
 	unsigned int MachineCode;
 	unsigned int rd, rs1, rs2, funct3, funct7, opcode; //homa dool
 													   //Immediates combined/expanded from homa dool
+	unsigned int UJ_imm, SB_imm;
 };
 
 struct label
@@ -47,13 +48,15 @@ instruction Parse(int MachineCode);
 bool readFile(string filename);
 bool IsInstruction(string temp);
 
-void Execute(instruction inst);
+void Execute(instruction inst, bool & finished);
 void Run();
 void Error();
 void Output();
 void MipsConvert();
 #pragma endregion
-
+//EC
+// 0 -> file error
+//
 #pragma region Main
 int main() {
 	string file;
@@ -63,10 +66,10 @@ int main() {
 	{
 		ErrorCode = 0;
 		Error();
-	} 
+	}
 	else
 	{
-		Run(); 
+		Run();
 		Output();
 	}
 	system("pause");
@@ -122,7 +125,6 @@ bool readFile(string filename)
 			if (IsInstruction(temp))
 			{
 				int machine = Assemble(temp);
-				//cout << hex << machine << endl;
 				memory[pc] = (machine & 0xFF000000)>>24;
 				memory[pc + 1] = (machine & 0x00FF0000)>>16;
 				memory[pc + 2] = (machine & 0x0000FF00)>>8;
@@ -145,6 +147,7 @@ void Run()
 {
 	int machine;
 	pc = 0x0;
+	bool finished = false;
 	do 
 	{
 		pc += 4;
@@ -158,11 +161,15 @@ void Run()
 		if (machine)
 		{
 			instruction ToBeExecuted = Parse(machine);
-			Execute(ToBeExecuted);
+			Execute(ToBeExecuted, finished);
 		}
-		//pc += 4; -> To be handled inside for some instructions bywado el PC amaken tanya
-	} while (machine != 0);
-	cout << "Done" << endl;
+	} while (machine != 0&&!finished);
+
+	if (!finished)
+	{
+		ErrorCode = 5; 
+		Error();
+	}
 }
 #pragma endregion
 
@@ -489,10 +496,22 @@ instruction Parse(int MachineCode)
 	Returned.funct3 = ((MachineCode & 0x00007000) >> 12);
 	Returned.rd = ((MachineCode & 0x00000f80) >> 7);
 	Returned.opcode = (MachineCode & 0x0000007f);
+	unsigned int part1, part2, part3, part4;
+	part1 = (((Returned.funct7) >> 6) << 20)&0x100000;
+	part2 = (MachineCode & 0xFF000);
+	part3 = (((MachineCode & 0x100000) >> 9)&0x800);
+	part4 = (((MachineCode & 0x7FE00000) >> 20) & (0x7FE));
+	Returned.UJ_imm = part1 + part2 + part3 + part4;
+	Returned.MachineCode = MachineCode;
+	part1 = (((MachineCode & 0x80000000) >> 19)&0x1000); 
+	part2 = (((MachineCode & 0x80) << 4)&0x800);
+	part3 = (((MachineCode & 0x7E000000) >> 20)&0x7E0);
+	part4 = (((MachineCode & 0xF00) >> 7)&0x1E);
+	Returned.SB_imm = part1 + part2 + part3 + part4;
 	return Returned;
 }
 
-void Execute(instruction inst)
+void Execute(instruction inst, bool & finished)
 {
 	int signed_bit;
 	int immediate;
@@ -503,139 +522,225 @@ void Execute(instruction inst)
 	// Executing instructions
 	if (inst.opcode == 0x33)
 	{
-		switch (inst.funct3)
+		if (inst.rd != 0)
 		{
-		case 0:
-			if (inst.funct7 == 32)
-				registers[inst.rd] = registers[inst.rs1] - registers[inst.rs2]; // SUB
-			else
-				registers[inst.rd] = registers[inst.rs1] + registers[inst.rs2]; // ADD
-			break;
-		case 1:
-			registers[inst.rd] = (registers[inst.rs1]) << (registers[inst.rs2] & 0x0000001F); // SLL (lower 5 bits)
-			break;
-		case 2:
-			if ((registers[inst.rs1]) < (registers[inst.rs2])) // SLT -- CHECK
-				registers[inst.rd] = 1;
-			else
-				registers[inst.rd] = 0;
-			break;
-		case 3:
-			if (abs(registers[inst.rs1]) < abs(registers[inst.rs2])) // SLTU -- CHECK
-				registers[inst.rd] = 1;
-			else
-				registers[inst.rd] = 0;
-			break;
-		case 4:
-			registers[inst.rd] = registers[inst.rs1] ^ registers[inst.rs2]; // XOR
-			break;
-		case 5:
-			if (inst.funct7 == 0)
-				registers[inst.rd] = (registers[inst.rs1]) >> (registers[inst.rs2] & 0x0000001F); // SRL
-			else
-			{	// SRA	
-				signed_bit = registers[inst.rs1] & 0x80000000;
-				int shamt = registers[inst.rs2] & 0x0000001F;
-				if (signed_bit)
-					for (int i = 0; i < shamt; i++)
-					{
-						registers[inst.rd] = registers[inst.rs1] >> 1;
-						registers[inst.rd] = registers[inst.rd] | 0x80000000;
-					}
+			switch (inst.funct3)
+			{
+			case 0:
+				if (inst.rd != 0)
+				{
+					if (inst.funct7 == 32)
+						registers[inst.rd] = registers[inst.rs1] - registers[inst.rs2]; // SUB
+					else
+						registers[inst.rd] = registers[inst.rs1] + registers[inst.rs2]; // ADD
+				}
+				break;
+			case 1:
+				if (inst.rd != 0)
+					registers[inst.rd] = (registers[inst.rs1]) << (registers[inst.rs2] & 0x0000001F); // SLL (lower 5 bits)
+				break;
+			case 2:
+				if (inst.rd != 0)
+				{
+					int rs1 = (registers[inst.rs1]);
+					int rs2 = (registers[inst.rs2]);
+					if (rs1 <rs2) // SLT -- CHECK
+						registers[inst.rd] = 1;
+					else
+						registers[inst.rd] = 0;
+				}
+				break;
+			case 3:
+				if (inst.rd != 0)
+				{
+					unsigned int rs1, rs2;
+					rs1 = registers[inst.rs1];
+					rs2 = registers[inst.rs2];
+					if (rs1 < rs2) // SLTU -- CHECK
+						registers[inst.rd] = 1;
+					else
+						registers[inst.rd] = 0;
+				}
+				break;
+			case 4:
+				if (inst.rd != 0)
+					registers[inst.rd] = registers[inst.rs1] ^ registers[inst.rs2]; // XOR
+				break;
+			case 5:
+				if (inst.funct7 == 0)
+					registers[inst.rd] = (registers[inst.rs1]) >> (registers[inst.rs2] & 0x0000001F); // SRL
 				else
-					registers[inst.rd] = registers[inst.rs1] >> shamt;
+				{	// SRA	
+					signed_bit = registers[inst.rs1] & 0x80000000;
+					unsigned int shamt = registers[inst.rs2] & 0x0000001F;
+					if (signed_bit)
+						for (int i = 0; i < shamt; i++)
+						{
+							registers[inst.rd] = registers[inst.rs1] >> 1;
+							registers[inst.rd] = registers[inst.rd] | 0x80000000;
+						}
+					else
+						registers[inst.rd] = registers[inst.rs1] >> shamt;
+				}
+				break;
+			case 6:
+				registers[inst.rd] = registers[inst.rs1] | registers[inst.rs2]; // OR
+				break;
+			case 7:
+				registers[inst.rd] = registers[inst.rs1] & registers[inst.rs2]; // AND
+				break;
 			}
-			break;
-		case 6:
-			registers[inst.rd] = registers[inst.rs1] | registers[inst.rs2]; // OR
-			break;
-		case 7:
-			registers[inst.rd] = registers[inst.rs1] & registers[inst.rs2]; // AND
-			break;
 		}
 	}
 	else if (inst.opcode == 0x13)
 	{
-		switch (inst.funct3)
+		if (inst.rd != 0)
 		{
-		case 0:
-			registers[inst.rd] = registers[inst.rs1] + ((inst.funct7 << 5) + inst.rs2); // ADDI
-			break;
-		case 1:
-			registers[inst.rd] = registers[inst.rs1] << inst.rs2; // SLLI
-			break;
-		case 2:
-			if (signed(registers[inst.rs1]) < signed(((inst.funct7 << 5) + inst.rs2))) // SLTI -- CHECK
-				registers[inst.rd] = 1;
-			else
-				registers[inst.rd] = 0;
-			break;
-		case 3:
-			if (unsigned(registers[inst.rs1]) < (unsigned((inst.funct7 << 5) + inst.rs2))) // SLTIU -- CHECK
-				registers[inst.rd] = 1;
-			else
-				registers[inst.rd] = 0;
-			break;
-		case 4:
-			registers[inst.rd] = registers[inst.rs1] ^ ((inst.funct7 << 5) + inst.rs2); // XORI
-			break;
-		case 5:
-			if (inst.funct7 == 0)
-				registers[inst.rd] = registers[inst.rs1] >> inst.rs2; // SRLI
-			else
-			{	// SRAI	
-				signed_bit = registers[inst.rs1] & 0x80000000;
-				int shamt = inst.rs2;
+			switch (inst.funct3)
+			{
+			case 0:
+				immediate = (((inst.funct7 << 5) + inst.rs2));
+				signed_bit = immediate >> 11; 
+				immediate = immediate & 0xFFF;
 				if (signed_bit)
-					for (int i = 0; i < shamt; i++)
-					{
-						registers[inst.rd] = registers[inst.rs1] >> 1;
-						registers[inst.rd] = registers[inst.rd] | 0x80000000;
-					}
+					immediate = immediate | 0xFFFFF000;
+
+				registers[inst.rd] = registers[inst.rs1] + immediate; // ADDI
+				break;
+			case 1:
+				immediate = inst.rs2;
+				signed_bit = immediate >> 4;
+				immediate = immediate & 0x1F;
+				if (signed_bit)
+					immediate = immediate | 0xFFFFFFF0;
+
+				registers[inst.rd] = registers[inst.rs1] << immediate; // SLLI
+				break;
+			case 2:
+				immediate = ((inst.funct7 << 5) + inst.rs2);
+				signed_bit = immediate >> 11;
+				immediate = immediate & 0xFFF;
+
+				if (signed_bit)
+					immediate = immediate | 0xFFFFF000;
+
+				if (registers[inst.rs1] < immediate) // SLTI -- CHECK
+					registers[inst.rd] = 1;
 				else
-					registers[inst.rd] = registers[inst.rs1] >> shamt;
+					registers[inst.rd] = 0;
+				break;
+			case 3:
+				immediateU = ((inst.funct7 << 5) + inst.rs2)&0xFFF;
+				if ((registers[inst.rs1]) <immediateU) // SLTIU -- CHECK
+					registers[inst.rd] = 1;
+				else
+					registers[inst.rd] = 0;
+				break;
+			case 4:
+				immediate = ((inst.funct7 << 5) + inst.rs2);
+				signed_bit = immediate >> 11;
+				immediate = immediate & 0xFFF;
+
+				if (signed_bit)
+					immediate = immediate | 0xFFFFF000;
+
+				registers[inst.rd] = registers[inst.rs1] ^ immediate; // XORI
+				break;
+			case 5:
+				if (inst.funct7 == 0) 
+				{
+					immediate = inst.rs2 & 0x1F;
+					signed_bit = immediate >> 4;
+
+					if (signed_bit)
+						immediate = immediate | 0xFFFFFFF0;
+
+					registers[inst.rd] = registers[inst.rs1] >> immediate;
+				}// SRLI
+				else
+				{	// SRAI	
+					signed_bit = (registers[inst.rs1] & 0x80000000)>>31;
+					unsigned int shamt = inst.rs2;
+					if (signed_bit)
+						for (int i = 0; i < shamt; i++)
+						{
+							registers[inst.rd] = registers[inst.rs1] >> 1;
+							registers[inst.rd] = registers[inst.rd] | 0x80000000;
+						}
+					else
+						registers[inst.rd] = registers[inst.rs1] >> shamt;
+				}
+				break;
+			case 6:
+				immediate = (inst.funct7 << 5) + inst.rs2;
+				signed_bit = immediate >> 11;
+				immediate = immediate & 0xFFF;
+
+				if (signed_bit)
+					immediate = immediate | 0xFFFFF000;
+
+				registers[inst.rd] = registers[inst.rs1] | (immediate); // ORI
+				break;
+			case 7:
+				immediate = (inst.funct7 << 5) + inst.rs2;
+				signed_bit = immediate >> 11;
+				immediate = immediate & 0xFFF;
+
+				if (signed_bit)
+					immediate = immediate | 0xFFFFF000;
+				registers[inst.rd] = registers[inst.rs1] & (immediate); // ANDI
+				break;
 			}
-			break;
-		case 6:
-			registers[inst.rd] = registers[inst.rs1] | ((inst.funct7 << 5) + inst.rs2); // ORI
-			break;
-		case 7:
-			registers[inst.rd] = registers[inst.rs1] & ((inst.funct7 << 5) + inst.rs2); // ANDI
-			break;
 		}
 	}
 	else if (inst.opcode == 0x37) // LUI
 	{
-		immediate = (inst.funct7 << 5) + inst.rs2;
-		immediate = (immediate << 5) + inst.rs1;
-		immediate = (immediate << 3) + inst.funct3;
-		registers[inst.rd] = immediate << 12;
+		if (inst.rd != 0)
+		{
+			immediate = (inst.MachineCode & 0xFFFFF000);
+			registers[inst.rd] = immediate;
+		}
 	}
 	else if (inst.opcode == 0x17) // AUIPC
 	{
-		immediate = (inst.funct7 << 5) + inst.rs2;
-		immediate = (immediate << 5) + inst.rs1;
-		immediate = (immediate << 3) + inst.funct3;
-		immediate = immediate << 12;
-		pc += immediate;
-		registers[inst.rd] = immediate;
+		if (inst.rd != 0)
+		{
+			immediate = (inst.MachineCode & 0xFFFFF000);
+			registers[inst.rd] = immediate+pc;
+		}
 	}
 	else if (inst.opcode == 0x6F) // JAL -- CHECK
 	{
-		offset = inst.funct7 >> 6; // imm[20]
-		offset = (offset << 8) + ((inst.rs1 << 3) + inst.funct3); // imm[19:12]
-		offset = (offset << 1) + ((inst.rs2 & 0x1)); // imm[11]
-		offset = (offset << 10) + (((inst.funct7 & 0x3F) << 4) + (inst.rs2 >> 1));
-		registers[inst.rd] = pc + 4;
-		pc += offset<<1;
+		offset = inst.UJ_imm;
+		signed_bit = offset >> 20; 
+		if (signed_bit)
+		{
+			offset = offset | 0xFFE00000;
+		}
+		else
+		{
+			offset = offset & 0x001FFFFF;
+		}
+		if (inst.rd != 0)
+			registers[inst.rd] = pc + 4;
+		pc += offset;
 		pc -= 4;
 	}
 	else if (inst.opcode == 0x67)
 	{
 		// JALR
-		registers[inst.rs1] = ((inst.funct7 << 5) + inst.rs2);
-		registers[inst.rs1] = registers[inst.rs1] & 0xFFFFFFFE;
-		registers[inst.rd] = pc + 4;
+		immediate = ((inst.funct7 << 5) + inst.rs2) & 0xFFF;
+		signed_bit = immediate >> 11;
+		immediate = immediate & 0xFFF;
+		if (signed_bit)
+			immediate = immediate | 0xFFFFF000;
+		offset = registers[inst.rs1] + immediate;
+		offset = offset & 0xFFFFFFFE;
+		if (inst.rd != 0)
+			registers[inst.rd] = pc + 4;
+
+		pc = offset; 
+		pc -= 4;
 	}
 	else if (inst.opcode == 0x63)
 	{
@@ -644,61 +749,65 @@ void Execute(instruction inst)
 		case 0: // BEQ
 			if (registers[inst.rs1] == registers[inst.rs2])
 			{
-				immediate = inst.funct7 >> 6; // imm[12]
-				immediate = (immediate << 1) + (inst.rd & 0x1); // imm[11]
-				immediate = (immediate << 6) + (inst.funct7 & 0x3F); // imm[10:5]
-				immediate = (immediate << 4) + (inst.rd >> 1); // imm[4:1]
+				immediate = inst.SB_imm;
+				signed_bit = immediate >> 12;
+				immediate = immediate & 0x1FFF;
+				if (signed_bit)
+					immediate = immediate | 0xFFFFF000;
 				pc += immediate; // CURRENT pc
+				pc -= 4;
 			}
 			break;
 		case 1: // BNE
 			if (registers[inst.rs1] != registers[inst.rs2])
 			{
-				immediate = inst.funct7 >> 6; // imm[12]
-				immediate = (immediate << 1) + (inst.rd & 0x1); // imm[11]
-				immediate = (immediate << 6) + (inst.funct7 & 0x3F); // imm[10:5]
-				immediate = (immediate << 4) + (inst.rd >> 1); // imm[4:1]
+				immediate = inst.SB_imm;
+				signed_bit = immediate >> 12;
+				immediate = immediate & 0x1FFF;
+				if (signed_bit)
+					immediate = immediate | 0xFFFFF000;
 				pc += immediate; // CURRENT pc
+				pc -= 4;
 			}
 			break;
 		case 4: // BLT
 			if (registers[inst.rs1] < registers[inst.rs2])
 			{
-				immediate = inst.funct7 >> 6; // imm[12]
-				immediate = (immediate << 1) + (inst.rd & 0x1); // imm[11]
-				immediate = (immediate << 6) + (inst.funct7 & 0x3F); // imm[10:5]
-				immediate = (immediate << 4) + (inst.rd >> 1); // imm[4:1]
+				immediate = inst.SB_imm;
+				signed_bit = immediate >> 12;
+				immediate = immediate & 0x1FFF;
+				if (signed_bit)
+					immediate = immediate | 0xFFFFF000;
 				pc += immediate; // CURRENT pc
+				pc -= 4;
 			}
 			break;
 		case 5: // BGE
 			if (registers[inst.rs1] >= registers[inst.rs2])
 			{
-				immediate = inst.funct7 >> 6; // imm[12]
-				immediate = (immediate << 1) + (inst.rd & 0x1); // imm[11]
-				immediate = (immediate << 6) + (inst.funct7 & 0x3F); // imm[10:5]
-				immediate = (immediate << 4) + (inst.rd >> 1); // imm[4:1]
+				immediate = inst.SB_imm;
+				signed_bit = immediate >> 12;
+				immediate = immediate & 0x1FFF;
+				if (signed_bit)
+					immediate = immediate | 0xFFFFF000;
 				pc += immediate; // CURRENT pc
+				pc -= 4;
 			}
 			break;
 		case 6: // BLTU -- CHECK
 			if (registers[inst.rs1] < registers[inst.rs2])
 			{
-				immediateU = inst.funct7 >> 6; // imm[12]
-				immediateU = (immediateU << 1) + (inst.rd & 0x1); // imm[11]
-				immediateU = (immediateU << 6) + (inst.funct7 & 0x3F); // imm[10:5]
-				immediateU = (immediateU << 4) + (inst.rd >> 1); // imm[4:1]
+				immediateU = inst.SB_imm;
 				pc += immediateU; // CURRENT pc
+				pc -= 4;
 			}
 			break;
 		case 7: // BGEU -- CHECK
 			if (registers[inst.rs1] >= registers[inst.rs2])
 			{
-				immediateU = inst.funct7 >> 6; // imm[12]
-				immediateU = (immediateU << 1) + (inst.rd & 0x1); // imm[11]
-				immediateU = (immediateU << 6) + (inst.funct7 & 0x3F); // imm[10:5]
-				immediateU = (immediateU << 4) + (inst.rd >> 1); // imm[4:1]
+				immediateU = inst.SB_imm;
 				pc += immediateU; // CURRENT pc
+				pc -= 4;
 			}
 			break;
 		}
@@ -721,7 +830,8 @@ void Execute(instruction inst)
 				value = value | 0xFFFFFF00;
 			else
 				value = value & 0x000000FF;
-			registers[inst.rd] = value; // loading into rd
+			if (inst.rd != 0)
+				registers[inst.rd] = value; // loading into rd
 			break;
 		case 1: // LH
 			offset = (inst.funct7 << 5) + inst.rs2; // 12 bits
@@ -738,7 +848,8 @@ void Execute(instruction inst)
 				value = value | 0xFFFF0000;
 			else
 				value = value & 0x0000FFFF;
-			registers[inst.rd] = value;
+			if (inst.rd != 0)
+				registers[inst.rd] = value;
 			break;
 		case 2: // LW
 			offset = (inst.funct7 << 5) + inst.rs2; // 12 bits
@@ -752,7 +863,8 @@ void Execute(instruction inst)
 			value = (value << 8) + memory[address + 1];
 			value = (value << 8) + memory[address + 2];
 			value = (value << 8) + memory[address + 3];
-			registers[inst.rd] = value;
+			if (inst.rd != 0)
+				registers[inst.rd] = value;
 			break;
 		case 4: // LBU
 			offset = (inst.funct7 << 5) + inst.rs2; // 12 bits
@@ -764,7 +876,8 @@ void Execute(instruction inst)
 			address = offset + registers[inst.rs1]; // base + offset
 			value = memory[address]; // taking 8 bits
 			value = value & 0x000000FF; // zero extension
-			registers[inst.rd] = value; // loading into rd
+			if (inst.rd != 0)
+				registers[inst.rd] = value; // loading into rd
 			break;
 		case 5: // LHU
 			offset = (inst.funct7 << 5) + inst.rs2; // 12 bits
@@ -777,7 +890,8 @@ void Execute(instruction inst)
 			value = memory[address]; // first 8 bits
 			value = (value << 8) + memory[address + 1];
 			value = value & 0x0000FFFF; // zero extension
-			registers[inst.rd] = value;
+			if (inst.rd != 0)
+				registers[inst.rd] = value;
 			break;
 		}
 	}
@@ -803,8 +917,9 @@ void Execute(instruction inst)
 			else
 				offset = offset & 0x00000FFF;
 			address = offset + registers[inst.rs1];
-			if (address % 2 == 1) // aligned on multiples of 2
-				address += 1;
+			/*if (address % 2 == 1) // aligned on multiples of 2
+				address += 1;*/
+			//address assumed to be hardcoded
 			// storing lowest 16 bits
 			memory[address] = (registers[inst.rs2] & 0x0000FF00) >> 8;
 			memory[address + 1] = registers[inst.rs2] & 0x000000FF;
@@ -818,12 +933,15 @@ void Execute(instruction inst)
 			else
 				offset = offset & 0x00000FFF;
 			address = offset + registers[inst.rs1];
+			/*
 			if (address % 4 == 1) // Aligned on multiples of 4
 				address += 3;
 			else if (address % 4 == 2)
 				address += 2;
 			else if (address % 4 == 3)
-				address += 1;
+				address += 1;*/
+			//address assumed to be hardcoded
+
 			memory[address] = (registers[inst.rs2] & 0xFF000000) >> 24;
 			memory[address + 1] = (registers[inst.rs2] & 0x00FF0000) >> 16;
 			memory[address + 2] = (registers[inst.rs2] & 0x0000FF00) >> 8;
@@ -860,12 +978,8 @@ void Execute(instruction inst)
 		}
 		else if (registers[10] == 10) // terminate execution
 		{
-
+			finished = true;
 		}
-	}
-	else
-	{
-		//Label
 	}
 }
 #pragma endregion
@@ -894,5 +1008,7 @@ int  GetImm(string temp)
 		Returned = stoi(temp);
 	}
 	return Returned;
+
+
 }
 #pragma endregion
