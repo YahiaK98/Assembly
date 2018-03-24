@@ -54,11 +54,33 @@ void Execute(instruction inst, bool & finished);
 void Run();
 void Error();
 void Output();
-void MipsConvert();
+void MipsConvert(string);
 #pragma endregion
+
+#pragma region ConversionHandlers
+unsigned int RiscToMipsRegs[32] =
+{
+	0,//zero
+	31, //ra
+	29, //sp
+	28, //gp
+	1, //at
+	26,27, //k0-k1 [reserved]
+	8, //t0
+	30, //fp
+	9,  //t1 
+	2,3, //v0-v1
+	4,5,6,7, //a0-a3
+	10,11, //t2-t3
+	16,17,18,19,20,21,22,23,//s0-s7
+	12,13,14,15,24,25 //t4-t9
+};
+#pragma endregion
+
 //EC
 // 0 -> file error
-//
+// 2 ->Unsupported instruction
+// 5 ->not proper termination of program
 #pragma region Main
 int main() {
 	string file;
@@ -73,6 +95,7 @@ int main() {
 	{
 		Run();
 		OutputOutputs();
+		MipsConvert(file);
 	}
 	system("pause");
 	return 0;
@@ -81,10 +104,59 @@ int main() {
 void Error()
 {
 	//TODO: create global errorstate variable and handle errors throughout functions and switch on error to give feedback to user and exit program
+	switch (ErrorCode)
+	{
+	case 0: 
+		cout << "ERROR! Loading file " << endl;
+		break; 
+	case 2:
+		cout << "ERROR! Program contains unsupported instructions (for mips conversion) [Pseudo-instructions]" << endl;
+		break; 
+	case 5: 
+		cout << "WARNING: Program ended unexpectedly, should be ended with an ECALL" << endl;
+		break;
+	default:
+		cout << "ERROR! Unhandled Error Occured" << endl;
+		break;
+	}
+	if (ErrorCode != 5)
+	{
+		system("pause");
+		exit(0);
+	}
 }
 
-void MipsConvert()
+void MipsConvert(string filename)
 {
+	cout << "Convert To mips module initiated" << endl;
+	pc = 0x0; 
+	int machine;
+	ofstream outputfile; 
+	string outfilename = filename.substr(0, filename.size() - 2) + "_Mips.bin";
+	outputfile.open(outfilename);
+	do
+	{
+
+		pc += 4;
+
+		int part1 = (((memory[pc - 4]) << 24) & 0xFF000000);
+		int part2 = (((memory[pc - 3]) << 16) & 0x00FF0000);
+		int part3 = (((memory[pc - 2]) << 8) & 0x0000FF00);
+		int part4 = ((memory[pc - 1]) & 0x000000FF);
+
+		machine = (part1 + part2 + part3 + part4);
+			if (machine)
+			{
+				instruction ToBeExecuted = Parse(machine);
+				int Mips_Code = FiveToMips(ToBeExecuted);
+				cout << "0x" << hex << setw(8) << setfill('0') << Mips_Code << endl;
+				outputfile << "0x" << hex << setw(8) << setfill('0') << Mips_Code << endl;
+
+			}
+
+	} while (machine != 0);
+	outputfile.close();
+
 	//TODO: main function to handle all the conversion from riscv to mips.. initializes pc.. loops over all the memory calls Five to mips after parsing instructions
 }
 
@@ -136,6 +208,7 @@ bool readFile(string filename)
 			}
 		}
 		Infile.close();
+		OutFile.close();
 		pc = 0x0;
 		return true;
 	}
@@ -500,11 +573,273 @@ int Assemble(string Text)
 	return Returned;
 }
 
-int FiveToMips(instruction Parsed)
+int FiveToMips(instruction inst)
 {
-	//TODO: Converts given instruction to Mips format 
-	//Similar to Execute function in terms of skeleton
-	return 1;
+	int signed_bit;
+	int immediate;
+	unsigned int Returned;
+	signed int offset;
+	unsigned int opcode; 
+	unsigned int rs, rt, rd, SHAMT, funct;
+	// Executing instructions
+	if (inst.opcode == 0x33)
+	{
+		opcode = 0;
+		rs = RiscToMipsRegs[inst.rs1]; 
+		rt = RiscToMipsRegs[inst.rs2];
+		rd = RiscToMipsRegs[inst.rd];
+		SHAMT = 0;
+			switch (inst.funct3)
+			{
+			case 0:
+				if (inst.funct7 == 32)
+					funct = 0x22; // SUB
+				else
+					funct = 0x20; // ADD
+				break;
+			case 1:
+				if (inst.rd != 0)
+				{
+					SHAMT = (registers[inst.rs2] & 0x0000001F);
+					funct=0;
+				}// SLL (lower 5 bits)
+				break;
+			case 2:
+				if (inst.rd != 0)
+				{
+					funct = 0x2a; 					//SLT
+				}
+				break;
+			case 3:
+				if (inst.rd != 0)
+				{
+					funct = 0x2b;
+				}//SLTU
+				break;
+			case 4:
+				funct = 0b100110;
+				 // XOR
+				break;
+			case 5:
+				if (inst.funct7 == 0)
+				{
+					funct = 0b000110; // SRLV
+				}
+				else
+				{	// SRA (implementing what could have been SRAV)	
+					unsigned int shamt = registers[inst.rs2] & 0x0000001F;
+					SHAMT = shamt; 
+					funct = 0b000011;
+				}
+				break;
+			case 6:
+				funct = 0b100101; // OR
+				break;
+			case 7:
+				funct = 100100; // AND
+				break;
+			}
+			if (inst.opcode == 0x13)
+			{
+				rs = 0; //not used in shift R-instructions
+				if (inst.funct3 == 1)
+				{
+					immediate = inst.rs2;
+					immediate = immediate & 0x1F;
+					SHAMT = immediate; 
+					funct = 0;// SLL
+				}
+				else if (inst.funct3 == 5)
+				{
+					if (inst.funct7 == 0)
+					{
+						 SHAMT = inst.rs2 & 0x1F;
+						 funct = 0b10;
+					}// SRL
+					else
+					{	// SRA
+						funct = 0b000011;
+						SHAMT = inst.rs2;
+					}
+				}
+			}
+			Returned = ((opcode & 0x3F) << 26) + ((rs & 0x1F) << 21) + ((rt & 0x1F) << 16) + ((rd & 0x1F) << 11) + ((SHAMT & 0x1F) << 6 )+ (funct&0x3F);
+	}
+	else if (inst.opcode == 0x13)
+	{
+		rs = RiscToMipsRegs[inst.rs1];
+		rt = RiscToMipsRegs[inst.rd];
+		immediate = (((inst.funct7 << 5) + inst.rs2)) & 0xFFF;
+		signed_bit = immediate >>11; 
+		if (signed_bit)
+		{
+			immediate = immediate | 0xFFFFF000;
+		}
+			switch (inst.funct3)
+			{
+			case 0:
+				opcode = 0b001000;
+				// ADDI
+				break;
+			case 2:
+				opcode = 0b001010;
+				//SLTI
+				break;
+			case 3:
+				immediate = immediate & 0xFFF;
+				opcode = 0b001011;
+				break;
+				// SLTIU -- CHECK
+			case 4:
+				opcode = 0b001110;
+				// XORI
+			case 6:
+				opcode = 0b001101;// ORI
+				break;
+			case 7:
+				 // ANDI
+				opcode = 0b001100;
+				break;
+			}
+			immediate = immediate & 0xFFFF;
+			Returned = ((opcode & 0x3F) << 26) + ((rs & 0x1F) << 21 )+ ((rt & 0x1F) << 16) + immediate;
+	}
+	else if (inst.opcode == 0x37) // LUI
+	{
+		immediate = (inst.MachineCode & 0xFFFF0000); //TODO:took higher 16
+	}
+	else if (inst.opcode == 0x17) // AUIPC
+	{
+		//TODO: Assume NO AUIPC in mips
+	}
+	else if (inst.opcode == 0x6F)
+	{
+		//JAL
+		offset = inst.UJ_imm;
+		signed_bit = offset >> 20;
+		offset = offset & 0x001FFFFF;
+
+		if (signed_bit)
+		{
+			offset = offset | 0xFFE00000;
+		}
+		offset = offset & 0x3FFFFFF;
+		opcode = 0b000011;
+		//immediate = ((pc + offset)>>2)+(pc&0xF0000000); outside assumed memory 
+		//TODO: Assumption
+		immediate = ((pc + offset) >> 2);
+
+		Returned = ((opcode & 0x3F) << 26 )+ (immediate & 0x3FFFFFF);
+	}
+	else if (inst.opcode == 0x67)
+	{
+		// JALR
+		//TODO: Assumed to take Mips' JalR instead of JR
+
+		rs = RiscToMipsRegs[inst.rs1];
+		rd = inst.rd;
+		opcode = 0;
+		rt = 0;
+		SHAMT = 0;
+		funct = 0b001001;
+		Returned = ((opcode & 0x3F) << 26 )+ ((rs & 0x1F) << 21 )+ ((rt & 0x1F) << 16) +((rd & 0x1F) << 11) + ((SHAMT & 0x1F) << 6) + (funct & 0x3F);
+	}
+	else if (inst.opcode == 0x63)
+	{
+		rs = RiscToMipsRegs[inst.rs1];
+		rt = RiscToMipsRegs[inst.rs2];
+		immediate = inst.SB_imm;
+		signed_bit = immediate >> 12;
+		immediate = immediate & 0x1FFF;
+		if (signed_bit)
+			immediate = immediate | 0xFFFFF000;
+		immediate = immediate & 0xFFFF;
+
+		switch (inst.funct3)
+		{
+		case 0: // BEQ
+			opcode = 0b000100;
+			break;
+		case 1: // BNE
+			opcode = 0b000101;
+			break;
+		default: 
+			ErrorCode = 2;
+			Error();
+			break;
+		}
+		immediate = immediate & 0xFFFF;
+		Returned = ((opcode & 0x3F) << 26 )+ ((rs & 0x1F) << 21 )+ ((rt & 0x1F) << 16) + immediate;
+
+			//TODO: WE don't handle pseudo mips instructions, even if they are native in risc v.
+	}
+	else if (inst.opcode == 0x03)
+	{
+		rs = RiscToMipsRegs[inst.rs1];
+		rt = RiscToMipsRegs[inst.rd];
+		immediate = (inst.funct7 << 5) + inst.rs2;
+		signed_bit = immediate >> 11;
+		immediate = immediate & 0xFFF;
+		if (signed_bit)
+			immediate = immediate | 0xFFFFF000;
+		immediate = immediate & 0xFFFF;
+
+		switch (inst.funct3)
+		{
+		case 0:	// LB 
+			opcode = 0b100000;
+			break;
+		case 1: // LH
+			opcode = 0b100001;
+			break;
+		case 2: // LW
+			opcode = 0b100011;
+			break;
+		case 4: // LBU
+			immediate = immediate & 0xFFF;
+			opcode = 0b100100;
+			break;
+		case 5: // LHU
+			immediate = immediate & 0xFFF;
+			opcode = 0b100101;
+			break;
+		}
+		immediate = immediate & 0xFFFF;
+		Returned = ((opcode & 0x3F) << 26) + ((rs & 0x1F) << 21) + ((rt & 0x1F) << 16) + immediate;
+
+	}
+	else if (inst.opcode == 0x23)
+	{
+		rs = RiscToMipsRegs[inst.rs1];
+		rt = RiscToMipsRegs[inst.rs2];
+		immediate = (inst.funct7 << 5) + inst.rd;
+		signed_bit = immediate >> 11;
+		immediate = immediate & 0xFFF;
+		if (signed_bit)
+			immediate = immediate | 0xFFFFF000;
+		immediate = immediate & 0xFFFF;
+		switch (inst.funct3)
+		{
+		case 0: // SB
+			opcode = 0b101000;
+			break;
+		case 1: // SH
+			opcode = 0b101001;
+			break;
+		case 2: // SW
+			opcode = 0b101011;
+			break;
+		}
+		immediate = immediate & 0xFFFF;
+		Returned = ((opcode & 0x3F) << 26) + ((rs & 0x1F) << 21) + ((rt & 0x1F) << 16) + immediate;
+
+	}
+	else if (inst.opcode == 0x73)
+	{
+		// ECALL
+		Returned = 0b1100;
+	}
+	return Returned;
 }
 
 instruction Parse(int MachineCode)
@@ -634,8 +969,6 @@ void Execute(instruction inst, bool & finished)
 				immediate = inst.rs2;
 				signed_bit = immediate >> 4;
 				immediate = immediate & 0x1F;
-				if (signed_bit)
-					immediate = immediate | 0xFFFFFFF0;
 
 				registers[inst.rd] = registers[inst.rs1] << immediate; // SLLI
 				break;
@@ -676,8 +1009,6 @@ void Execute(instruction inst, bool & finished)
 					immediate = inst.rs2 & 0x1F;
 					signed_bit = immediate >> 4;
 
-					if (signed_bit)
-						immediate = immediate | 0xFFFFFFF0;
 
 					registers[inst.rd] = registers[inst.rs1] >> immediate;
 				}// SRLI
@@ -1039,6 +1370,10 @@ void OutputOutputs()
 		cout << left << setfill('_') << "Output" << setw(2) << i << ":";
 		cout << OutputStrings.at(i) << endl;
 	}
+	int choice = int('Y');
+	cout << "Press any key to enter ToMipsConverter: ";
+	choice = _getch();
+	system("CLS");
 }
 
 void Output()
