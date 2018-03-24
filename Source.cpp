@@ -81,6 +81,7 @@ unsigned int RiscToMipsRegs[32] =
 // 0 -> file error
 // 2 ->Unsupported instruction
 // 5 ->not proper termination of program
+
 #pragma region Main
 int main() {
 	string file;
@@ -598,23 +599,15 @@ int FiveToMips(instruction inst)
 					funct = 0x20; // ADD
 				break;
 			case 1:
-				if (inst.rd != 0)
-				{
-					SHAMT = (registers[inst.rs2] & 0x0000001F);
-					funct=0;
-				}// SLL (lower 5 bits)
+				SHAMT = (registers[inst.rs2] & 0x0000001F);
+				funct=0;
 				break;
 			case 2:
-				if (inst.rd != 0)
-				{
-					funct = 0x2a; 					//SLT
-				}
+				funct = 0x2a; 					//SLT
 				break;
 			case 3:
-				if (inst.rd != 0)
-				{
-					funct = 0x2b;
-				}//SLTU
+				funct = 0x2b;
+			//SLTU
 				break;
 			case 4:
 				funct = 0b100110;
