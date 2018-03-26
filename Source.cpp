@@ -104,7 +104,6 @@ int main() {
 
 void Error()
 {
-	//TODO: create global errorstate variable and handle errors throughout functions and switch on error to give feedback to user and exit program
 	switch (ErrorCode)
 	{
 	case 0: 
@@ -158,7 +157,6 @@ void MipsConvert(string filename)
 	} while (machine != 0);
 	outputfile.close();
 
-	//TODO: main function to handle all the conversion from riscv to mips.. initializes pc.. loops over all the memory calls Five to mips after parsing instructions
 }
 
 bool readFile(string filename)
@@ -619,7 +617,7 @@ int FiveToMips(instruction inst)
 					funct = 0b000110; // SRLV
 				}
 				else
-				{	// SRA (implementing what could have been SRAV)	
+				{	/x
 					unsigned int shamt = registers[inst.rs2] & 0x0000001F;
 					SHAMT = shamt; 
 					funct = 0b000011;
