@@ -173,6 +173,7 @@ bool readFile(string filename)
 	{
 		label tempL;
 		int InstructionNo = 0;
+		//collecting labels [precompilation]
 		while (!Infile.eof())
 		{
 			bool IsLabel = false;
@@ -191,6 +192,7 @@ bool readFile(string filename)
 		}
 		Infile.close();
 		Infile.open(filename);
+		//Assembling
 		while (!Infile.eof())
 		{
 			getline(Infile, temp);
@@ -580,7 +582,7 @@ int FiveToMips(instruction inst)
 	signed int offset;
 	unsigned int opcode; 
 	unsigned int rs, rt, rd, SHAMT, funct;
-	// Executing instructions
+	// R_Format
 	if (inst.opcode == 0x33)
 	{
 		opcode = 0;
@@ -604,12 +606,10 @@ int FiveToMips(instruction inst)
 				funct = 0x2a; 					//SLT
 				break;
 			case 3:
-				funct = 0x2b;
-			//SLTU
+				funct = 0x2b;			//SLTU
 				break;
 			case 4:
-				funct = 0b100110;
-				 // XOR
+				funct = 0b100110;				 // XOR
 				break;
 			case 5:
 				if (inst.funct7 == 0)
@@ -656,6 +656,7 @@ int FiveToMips(instruction inst)
 			}
 			Returned = ((opcode & 0x3F) << 26) + ((rs & 0x1F) << 21) + ((rt & 0x1F) << 16) + ((rd & 0x1F) << 11) + ((SHAMT & 0x1F) << 6 )+ (funct&0x3F);
 	}
+	//I_Format
 	else if (inst.opcode == 0x13)
 	{
 		rs = RiscToMipsRegs[inst.rs1];
@@ -669,21 +670,18 @@ int FiveToMips(instruction inst)
 			switch (inst.funct3)
 			{
 			case 0:
-				opcode = 0b001000;
-				// ADDI
+				opcode = 0b001000;				// ADDI
 				break;
 			case 2:
-				opcode = 0b001010;
-				//SLTI
+				opcode = 0b001010;				//SLTI
 				break;
 			case 3:
 				immediate = immediate & 0xFFF;
 				opcode = 0b001011;
-				break;
-				// SLTIU -- CHECK
+				break;				// SLTIU -- CHECK
 			case 4:
-				opcode = 0b001110;
-				// XORI
+				opcode = 0b001110; 				// XORI
+				break;
 			case 6:
 				opcode = 0b001101;// ORI
 				break;
@@ -695,14 +693,17 @@ int FiveToMips(instruction inst)
 			immediate = immediate & 0xFFFF;
 			Returned = ((opcode & 0x3F) << 26) + ((rs & 0x1F) << 21 )+ ((rt & 0x1F) << 16) + immediate;
 	}
+	//LUI
 	else if (inst.opcode == 0x37) // LUI
 	{
 		immediate = (inst.MachineCode & 0xFFFF0000); //TODO:took higher 16
 	}
+	//AUIPC -- not implemented
 	else if (inst.opcode == 0x17) // AUIPC
 	{
 		//TODO: Assume NO AUIPC in mips
 	}
+	//JAL
 	else if (inst.opcode == 0x6F)
 	{
 		//JAL
@@ -722,6 +723,7 @@ int FiveToMips(instruction inst)
 
 		Returned = ((opcode & 0x3F) << 26 )+ (immediate & 0x3FFFFFF);
 	}
+	//JALR
 	else if (inst.opcode == 0x67)
 	{
 		// JALR
@@ -735,7 +737,8 @@ int FiveToMips(instruction inst)
 		funct = 0b001001;
 		Returned = ((opcode & 0x3F) << 26 )+ ((rs & 0x1F) << 21 )+ ((rt & 0x1F) << 16) +((rd & 0x1F) << 11) + ((SHAMT & 0x1F) << 6) + (funct & 0x3F);
 	}
-	else if (inst.opcode == 0x63)
+	//Branch
+	else if (inst.opcode == 0x63) //Branch
 	{
 		rs = RiscToMipsRegs[inst.rs1];
 		rt = RiscToMipsRegs[inst.rs2];
@@ -764,6 +767,7 @@ int FiveToMips(instruction inst)
 
 			//TODO: WE don't handle pseudo mips instructions, even if they are native in risc v.
 	}
+	//Load
 	else if (inst.opcode == 0x03)
 	{
 		rs = RiscToMipsRegs[inst.rs1];
@@ -799,6 +803,7 @@ int FiveToMips(instruction inst)
 		Returned = ((opcode & 0x3F) << 26) + ((rs & 0x1F) << 21) + ((rt & 0x1F) << 16) + immediate;
 
 	}
+	//Store
 	else if (inst.opcode == 0x23)
 	{
 		rs = RiscToMipsRegs[inst.rs1];
@@ -825,6 +830,7 @@ int FiveToMips(instruction inst)
 		Returned = ((opcode & 0x3F) << 26) + ((rs & 0x1F) << 21) + ((rt & 0x1F) << 16) + immediate;
 
 	}
+	//Ecall
 	else if (inst.opcode == 0x73)
 	{
 		// ECALL
