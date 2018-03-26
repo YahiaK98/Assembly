@@ -617,7 +617,7 @@ int FiveToMips(instruction inst)
 					funct = 0b000110; // SRLV
 				}
 				else
-				{	/x
+				{	//SRA (implementing what could have been srav in mips)
 					unsigned int shamt = registers[inst.rs2] & 0x0000001F;
 					SHAMT = shamt; 
 					funct = 0b000011;
