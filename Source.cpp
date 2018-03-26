@@ -629,6 +629,11 @@ int FiveToMips(instruction inst)
 			case 7:
 				funct = 100100; // AND
 				break;
+			default:
+				ErrorCode = 2;
+				Error();
+				break;
+
 			}
 			if (inst.opcode == 0x13)
 			{
@@ -659,14 +664,47 @@ int FiveToMips(instruction inst)
 	//I_Format
 	else if (inst.opcode == 0x13)
 	{
-		rs = RiscToMipsRegs[inst.rs1];
-		rt = RiscToMipsRegs[inst.rd];
-		immediate = (((inst.funct7 << 5) + inst.rs2)) & 0xFFF;
-		signed_bit = immediate >>11; 
-		if (signed_bit)
+		if (inst.funct3 == 5 || inst.funct3 == 1)
 		{
-			immediate = immediate | 0xFFFFF000;
+			opcode = 0;
+			rt = RiscToMipsRegs[inst.rs2];
+			rd = RiscToMipsRegs[inst.rd];
+			SHAMT = 0;
+
+			rs = 0; //not used in shift R-instructions
+			if (inst.funct3 == 1)
+			{
+				immediate = inst.rs2;
+				immediate = immediate & 0x1F;
+				SHAMT = immediate;
+				funct = 0;// SLL
+			}
+			else if (inst.funct3 == 5)
+			{
+				if (inst.funct7 == 0)
+				{
+					SHAMT = inst.rs2 & 0x1F;
+					funct = 0b10;
+				}// SRL
+				else
+				{	// SRA
+					funct = 0b000011;
+					SHAMT = inst.rs2;
+				}
+			}
+			Returned = ((opcode & 0x3F) << 26) + ((rs & 0x1F) << 21) + ((rt & 0x1F) << 16) + ((rd & 0x1F) << 11) + ((SHAMT & 0x1F) << 6) + (funct & 0x3F);
 		}
+		else
+		{
+
+			rs = RiscToMipsRegs[inst.rs1];
+			rt = RiscToMipsRegs[inst.rd];
+			immediate = (((inst.funct7 << 5) + inst.rs2)) & 0xFFF;
+			signed_bit = immediate >> 11;
+			if (signed_bit)
+			{
+				immediate = immediate | 0xFFFFF000;
+			}
 			switch (inst.funct3)
 			{
 			case 0:
@@ -686,12 +724,18 @@ int FiveToMips(instruction inst)
 				opcode = 0b001101;// ORI
 				break;
 			case 7:
-				 // ANDI
+				// ANDI
 				opcode = 0b001100;
 				break;
+			default:
+				ErrorCode = 2;
+				Error();
+				break;
+
 			}
 			immediate = immediate & 0xFFFF;
-			Returned = ((opcode & 0x3F) << 26) + ((rs & 0x1F) << 21 )+ ((rt & 0x1F) << 16) + immediate;
+			Returned = ((opcode & 0x3F) << 26) + ((rs & 0x1F) << 21) + ((rt & 0x1F) << 16) + immediate;
+		}
 	}
 	//LUI
 	else if (inst.opcode == 0x37) // LUI
@@ -798,6 +842,11 @@ int FiveToMips(instruction inst)
 			immediate = immediate & 0xFFF;
 			opcode = 0b100101;
 			break;
+		default:
+			ErrorCode = 2;
+			Error();
+			break;
+
 		}
 		immediate = immediate & 0xFFFF;
 		Returned = ((opcode & 0x3F) << 26) + ((rs & 0x1F) << 21) + ((rt & 0x1F) << 16) + immediate;
@@ -825,6 +874,11 @@ int FiveToMips(instruction inst)
 		case 2: // SW
 			opcode = 0b101011;
 			break;
+		default:
+			ErrorCode = 2;
+			Error();
+			break;
+
 		}
 		immediate = immediate & 0xFFFF;
 		Returned = ((opcode & 0x3F) << 26) + ((rs & 0x1F) << 21) + ((rt & 0x1F) << 16) + immediate;
