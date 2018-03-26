@@ -980,7 +980,7 @@ void Execute(instruction inst, bool & finished)
 					registers[inst.rd] = (registers[inst.rs1]) >> (registers[inst.rs2] & 0x0000001F); // SRL
 				else
 				{	// SRA	
-					signed_bit = registers[inst.rs1] & 0x80000000;
+					signed_bit = (registers[inst.rs1] & 0x80000000) >> 31;
 					unsigned int shamt = registers[inst.rs2] & 0x0000001F;
 					registers[inst.rd] = registers[inst.rs1];
 					if (signed_bit)
@@ -1068,10 +1068,11 @@ void Execute(instruction inst, bool & finished)
 				{	// SRAI	
 					signed_bit = (registers[inst.rs1] & 0x80000000)>>31;
 					unsigned int shamt = inst.rs2;
+					registers[inst.rd] = registers[inst.rs1];
 					if (signed_bit)
 						for (unsigned int i = 0; i < shamt; i++)
 						{
-							registers[inst.rd] = registers[inst.rs1] >> 1;
+							registers[inst.rd] = registers[inst.rd] >> 1;
 							registers[inst.rd] = registers[inst.rd] | 0x80000000;
 						}
 					else
